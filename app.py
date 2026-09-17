@@ -10,34 +10,197 @@ import docx
 from google import genai
 from google.genai import types
 
-st.set_page_config(page_title="ระบบบันทึกหลังการสอน AI", page_icon="📝", layout="wide")
+# กำหนดรหัสผ่านสำหรับปลดล็อกระบบ
+SYSTEM_PASSCODE = "0863449483"
 
-st.title("📝 ระบบจัดทำบันทึกหลังการสอนอัตโนมัติ")
-st.caption("สกัดข้อมูลจากโครงการสอนและสร้างเอกสาร Word ตามแบบฟอร์มวิทยาลัยเป๊ะ 100%")
+st.set_page_config(
+    page_title="ระบบบันทึกหลังการสอน AI อาชีวศึกษา",
+    page_icon="✨",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
+# สไตล์ตกแต่ง UI สีสัน สดใส มีมิติ พร้อมกล่องลิขสิทธิ์
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+    html, body, [class*="css"] {
+        font-family: 'Prompt', sans-serif;
+    }
+    .main-header {
+        background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 50%, #06B6D4 100%);
+        padding: 24px;
+        border-radius: 16px;
+        color: white;
+        text-align: center;
+        margin-bottom: 25px;
+        box-shadow: 0 10px 25px rgba(30, 58, 138, 0.25);
+    }
+    .main-header h1 {
+        color: white !important;
+        font-weight: 700;
+        margin-bottom: 8px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .main-header p {
+        color: #E0F2FE !important;
+        font-size: 15px;
+        margin-bottom: 0;
+    }
+    .card-box {
+        background: #ffffff;
+        border: 1px solid #E2E8F0;
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+    .badge-tag {
+        background: linear-gradient(90deg, #EC4899, #8B5CF6);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+        margin-bottom: 10px;
+    }
+    .stButton>button {
+        background: linear-gradient(90deg, #F43F5E 0%, #E11D48 100%) !important;
+        color: white !important;
+        font-size: 17px !important;
+        font-weight: 600 !important;
+        border-radius: 12px !important;
+        border: none !important;
+        padding: 12px 24px !important;
+        box-shadow: 0 8px 20px rgba(225, 29, 72, 0.3) !important;
+        transition: all 0.3s ease !important;
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 25px rgba(225, 29, 72, 0.45) !important;
+    }
+    .footer-box {
+        text-align: center;
+        padding: 24px 10px;
+        margin-top: 50px;
+        border-top: 1px solid #E2E8F0;
+        color: #64748B;
+        font-size: 13.5px;
+    }
+    .footer-badge {
+        display: inline-block;
+        background: #F1F5F9;
+        border: 1px solid #CBD5E1;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 8px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ระบบตรวจสอบรหัสผ่านปลดล็อก
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.markdown("""
+    <div class="main-header">
+        <h1>🔒 ระบบจัดทำบันทึกหลังการสอนอัตโนมัติ AI</h1>
+        <p>กรุณากรอกรหัสผ่านเพื่อปลดล็อกเข้าสู่ระบบ</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
+    with col_l2:
+        st.markdown('<div class="card-box">', unsafe_allow_html=True)
+        st.subheader("🔑 ยืนยันสิทธิ์การเข้าใช้งาน")
+        pass_input = st.text_input("รหัสปลดล็อกระบบ (Passcode):", type="password", placeholder="กรอกรหัสจากผู้ดูแลระบบ...")
+        if st.button("🔓 ปลดล็อกเข้าสู่ระบบ", use_container_width=True):
+            if pass_input == SYSTEM_PASSCODE:
+                st.session_state.authenticated = True
+                st.success("✅ ปลดล็อกสำเร็จ กำลังเข้าสู่ระบบ...")
+                st.rerun()
+            else:
+                st.error("❌ รหัสผ่านไม่ถูกต้อง กรุณาติดต่อเจ้าของระบบ")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div class="footer-box" style="margin-top: 20px;">
+            <div class="footer-badge">🛡️ PROPRIETARY SOFTWARE</div><br/>
+            © สงวนลิขสิทธิ์ พัฒนาเพื่อการศึกษาอาชีวศึกษาโดย <b>ครูณัฐวุฒิ ละผ่องใส</b>
+        </div>
+        """, unsafe_allow_html=True)
+    st.stop()
+
+# เมื่อปลดล็อกผ่าน เข้าสู่หน้าหลักของระบบ
 THAI_MONTHS = [
     "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
     "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
 ]
 DAY_NAMES = ["วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
+DEPARTMENT_OPTIONS = [
+    "การจัดการโลจิสติกส์และซัพพลายเชน",
+    "เทคโนโลยีสารสนเทศ",
+    "คอมพิวเตอร์ธุรกิจ",
+    "การบัญชี",
+    "การตลาด",
+    "ช่างยนต์",
+    "ช่างไฟฟ้ากำลัง",
+    "ช่างอิเล็กทรอนิกส์",
+    "ช่างก่อสร้าง",
+    "อื่นๆ (ระบุเอง)"
+]
+
+st.markdown("""
+<div class="main-header">
+    <h1>📝 ระบบจัดทำบันทึกหลังการสอนอัตโนมัติ (AI Professional)</h1>
+    <p>วิเคราะห์โครงการสอน สกัดรายสัปดาห์ รองรับการฉีกคาบสูงสุด 4 คาบ และเรนเดอร์ลงแบบฟอร์มวิทยาลัยเป๊ะ 100%</p>
+</div>
+""", unsafe_allow_html=True)
 
 with st.sidebar:
-    st.header("⚙️ การตั้งค่าระบบ")
-    api_key_input = st.text_input("Gemini API Key:", type="password", placeholder="AIzaSy...")
-    st.markdown("[รับ API Key ฟรีที่นี่](https://aistudio.google.com/apikey)")
+    st.header("⚙️ การตั้งค่าระบบ & สิทธิ์")
+    st.markdown('<span class="badge-tag">STATUS: UNLOCKED</span>', unsafe_allow_html=True)
+    
+    api_key_input = st.text_input("🔑 Gemini API Key:", type="password", placeholder="AIzaSy...")
+    st.markdown("[👉 รับ API Key ฟรีคลิกที่นี่](https://aistudio.google.com/apikey)")
     st.divider()
+
+    st.subheader("👤 ข้อมูลครูผู้สอน")
     teacher_name = st.text_input("ชื่อ-สกุลครูผู้สอน:", value="นายณัฐวุฒิ ละผ่องใส")
-    department = st.text_input("สาขาวิชา/แผนกวิชา:", value="การจัดการโลจิสติกส์และซัพพลายเชน")
+    
+    dept_choice = st.selectbox("สาขาวิชา / แผนกวิชา:", DEPARTMENT_OPTIONS, index=0)
+    if dept_choice == "อื่นๆ (ระบุเอง)":
+        department = st.text_input("ระบุสาขาวิชาของคุณ:", value="")
+    else:
+        department = dept_choice
+
+    st.markdown("---")
+    if st.button("🔒 ล็อกระบบกลับ"):
+        st.session_state.authenticated = False
+        st.rerun()
+
+    st.markdown("""
+    <div style="font-size: 12px; color: #94A3B8; text-align: center; margin-top: 25px;">
+        <b>AI Vocational Reflection System</b><br/>
+        Version 2.5 • Official EdTech Build<br/>
+        © 2026 นายณัฐวุฒิ ละผ่องใส All Rights Reserved.
+    </div>
+    """, unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("1. แบบฟอร์มและระดับการศึกษา")
+    st.subheader("📁 1. แบบฟอร์มและหลักสูตร")
     tpl_file = st.file_uploader("📄 แนบแบบฟอร์มวิทยาลัย (template.docx):", type=["docx"])
     uploaded_file = st.file_uploader("📚 แนบไฟล์โครงการสอน (PDF, Word, TXT, รูปภาพ):", type=["pdf", "docx", "txt", "png", "jpg", "jpeg"])
     
     st.markdown("---")
-    st.markdown("**เลือกระดับชั้นการศึกษา:**")
+    st.markdown("🎯 **เลือกระดับชั้นและวุฒิการศึกษา:**")
     c_deg, c_yr = st.columns(2)
     with c_deg:
         degree = st.selectbox("ระดับคุณวุฒิ:", ["ปวช.", "ปวส."])
@@ -50,31 +213,31 @@ with col1:
             target_weeks = 15
 
     class_level = f"{degree} {year_num}"
-    st.info(f"📌 ระดับชั้น: **{class_level}** | กำหนดจำนวนอัตโนมัติ: **{target_weeks} สัปดาห์**")
+    st.info(f"✨ ระดับ: **{class_level}** | สาขา: **{department}** | กำหนดอัตโนมัติ: **{target_weeks} สัปดาห์**")
 
 with col2:
-    st.subheader("2. กำหนดตารางเวลาและวันสอน")
-    schedule_mode = st.radio(
-        "รูปแบบคาบสอนในแต่ละสัปดาห์:",
-        ["สอนวันเดียว (รวดเดียว)", "ฉีกคาบสอน (แยก 2 วันใน 1 สัปดาห์)"],
+    st.subheader("⏰ 2. ตารางวัน-เวลา และการฉีกคาบสอน")
+    slots_count = st.selectbox(
+        "จำนวนคาบสอนใน 1 สัปดาห์ (ฉีกคาบได้สูงสุด 4 คาบ):",
+        options=[1, 2, 3, 4],
+        format_func=lambda x: f"สอน {x} คาบ / สัปดาห์" if x > 1 else "สอน 1 คาบ (วันเดียวจบ)",
         index=1
     )
 
-    if schedule_mode == "สอนวันเดียว (รวดเดียว)":
-        day_1 = st.selectbox("วันที่สอน:", DAY_NAMES, index=0)
-        time_1 = st.text_input("ช่วงเวลาเรียน:", value="08.30 - 10.30 น.")
-        is_split = False
-    else:
-        is_split = True
-        c_sub1, c_sub2 = st.columns(2)
-        with c_sub1:
-            day_1 = st.selectbox("คาบที่ 1 (วัน):", DAY_NAMES, index=0)
-            time_1 = st.text_input("เวลาคาบที่ 1:", value="15.30-16.30 น.")
-        with c_sub2:
-            day_2 = st.selectbox("คาบที่ 2 (วัน):", DAY_NAMES, index=1)
-            time_2 = st.text_input("เวลาคาบที่ 2:", value="08.30-10.30 น.")
+    slots_info = []
+    default_days = [0, 1, 2, 3]
+    default_times = ["15.30-16.30 น.", "08.30-10.30 น.", "10.30-12.30 น.", "13.30-15.30 น."]
 
-    start_date = st.date_input("วันที่เริ่มสอนสัปดาห์ที่ 1 (เพื่อคำนวณปฏิทินอัตโนมัติ):")
+    for i in range(slots_count):
+        st.markdown(f"**📌 รายละเอียดคาบที่ {i+1}:**")
+        sc1, sc2 = st.columns(2)
+        with sc1:
+            d_val = st.selectbox(f"วัน (คาบที่ {i+1}):", DAY_NAMES, index=default_days[i % len(default_days)], key=f"day_slot_{i}")
+        with sc2:
+            t_val = st.text_input(f"เวลา (คาบที่ {i+1}):", value=default_times[i % len(default_times)], key=f"time_slot_{i}")
+        slots_info.append({"day": d_val, "time": t_val})
+
+    start_date = st.date_input("📅 วันที่เริ่มสอนสัปดาห์ที่ 1 (คำนวณปฏิทินไทยอัตโนมัติ):")
 
     holiday_text = st.text_area(
         "ระบุสัปดาห์และเหตุผลการงดสอน (ถ้ามี เช่น '8:ตรงกับวันหยุดนักขัตฤกษ์'):",
@@ -89,23 +252,26 @@ def format_thai_date(dt):
     day_name = DAY_NAMES[dt.weekday()]
     return f"{day_name} {d} {m} {y}"
 
-if st.button(f"🚀 เริ่มสร้างเอกสารบันทึกหลังการสอนครบ {target_weeks} สัปดาห์", type="primary", use_container_width=True):
+if st.button(f"🚀 เริ่มสร้างเอกสารบันทึกหลังการสอนครบ {target_weeks} สัปดาห์", use_container_width=True):
     api_key = api_key_input.strip() if api_key_input else ""
     if not api_key:
-        st.warning("กรุณากรอก Gemini API Key ที่แถบด้านซ้ายก่อนเริ่มใช้งาน")
+        st.warning("⚠️ กรุณากรอก Gemini API Key ที่แถบด้านซ้ายก่อนเริ่มใช้งาน")
         st.stop()
     if not tpl_file:
-        st.warning("กรุณาแนบไฟล์ template.docx")
+        st.warning("⚠️ กรุณาแนบไฟล์ template.docx ของวิทยาลัย")
         st.stop()
     if not uploaded_file:
-        st.warning("กรุณาแนบไฟล์โครงการสอน")
+        st.warning("⚠️ กรุณาแนบไฟล์โครงการสอน")
+        st.stop()
+    if not department.strip():
+        st.warning("⚠️ กรุณาระบุสาขาวิชา/แผนกวิชา")
         st.stop()
 
     progress_bar = st.progress(0)
     status_text = st.empty()
 
     try:
-        status_text.text("กำลังส่งข้อมูลให้ Gemini AI วิเคราะห์โครงการสอน...")
+        status_text.text("🤖 กำลังส่งข้อมูลให้ Gemini AI วิเคราะห์โครงการสอน...")
         client = genai.Client(api_key=api_key)
         file_bytes = uploaded_file.read()
         mime_type = uploaded_file.type or "application/octet-stream"
@@ -149,7 +315,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         last_error = None
 
         for target_m in models_to_try:
-            status_text.text(f"กำลังประมวลผลด้วยโมเดล {target_m}...")
+            status_text.text(f"⏳ กำลังประมวลผลด้วยโมเดล {target_m}...")
             try:
                 response = client.models.generate_content(
                     model=target_m,
@@ -203,31 +369,25 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         tpl_bytes = tpl_file.read()
         merged_doc = None
         total_count = len(final_weeks)
-
         day_map = {name: idx for idx, name in enumerate(DAY_NAMES)}
-        target_weekday_1 = day_map.get(day_1, 0)
-        target_weekday_2 = day_map.get(day_2, 1) if is_split else None
 
         for idx, w in enumerate(final_weeks):
             progress_bar.progress(int(((idx + 1) / total_count) * 100))
-            status_text.text(f"กำลังลงข้อมูลสัปดาห์ที่ {w.get('week')} ในแบบฟอร์มวิทยาลัย...")
+            status_text.text(f"📝 กำลังลงข้อมูลสัปดาห์ที่ {w.get('week')} ในแบบฟอร์มวิทยาลัย...")
 
             week_num = w.get("week", idx + 1)
             base_week_date = start_date + timedelta(weeks=(week_num - 1))
-            date_dt_1 = base_week_date + timedelta(days=(target_weekday_1 - base_week_date.weekday()))
-            date_str_1 = format_thai_date(date_dt_1)
-            time_str_1 = f"เวลา {time_1}"
+            
+            date_lines = []
+            time_lines = []
+            for slot in slots_info:
+                t_wday = day_map.get(slot["day"], 0)
+                dt_slot = base_week_date + timedelta(days=(t_wday - base_week_date.weekday()))
+                date_lines.append(format_thai_date(dt_slot))
+                time_lines.append(f"เวลา {slot['time']}")
 
-            if is_split:
-                date_dt_2 = base_week_date + timedelta(days=(target_weekday_2 - base_week_date.weekday()))
-                date_str_2 = format_thai_date(date_dt_2)
-                time_str_2 = f"เวลา {time_2}"
-
-                date_display = f"{date_str_1}\n{date_str_2}"
-                time_display = f"{time_str_1}\n{time_str_2}"
-            else:
-                date_display = date_str_1
-                time_display = time_str_1
+            date_display = "\n".join(date_lines)
+            time_display = "\n".join(time_lines)
 
             is_hol = w.get("is_holiday", False)
             context_w = {
@@ -278,7 +438,8 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         progress_bar.progress(100)
         status_text.empty()
 
-        st.success(f"🎉 สร้างเอกสารครบ {target_weeks} สัปดาห์ สำหรับระดับ {class_level} เรียบร้อย 100%!")
+        st.balloons()
+        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ สำหรับระดับ {class_level} สาขา {department} เรียบร้อย 100%!")
         st.download_button(
             label="📥 ดาวน์โหลดไฟล์ Word (แบบฟอร์มวิทยาลัยตรงเป๊ะ)",
             data=output_stream,
@@ -290,3 +451,13 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
     except Exception as e:
         status_text.empty()
         st.error(f"เกิดข้อผิดพลาด: {str(e)}")
+
+# กล่องข้อมูลลิขสิทธิ์และผู้พัฒนาระบบด้านล่างสุด
+st.markdown("""
+<div class="footer-box">
+    <div class="footer-badge">🛡️ PROPRIETARY & EDUCATIONAL OPEN-SOURCE</div><br/>
+    <b>ระบบปัญญาประดิษฐ์สกัดและจัดทำบันทึกหลังการสอนอาชีวศึกษา (AI Vocational Reflection)</b><br/>
+    สงวนลิขสิทธิ์ พัฒนาโดย <b>นายณัฐวุฒิ ละผ่องใส</b> • แผนกวิชาการจัดการโลจิสติกส์และซัพพลายเชน<br/>
+    <span style="font-size: 12px; color: #94A3B8;">ขับเคลื่อนด้วย Streamlit & Google Gemini AI Flash Engine</span>
+</div>
+""", unsafe_allow_html=True)
