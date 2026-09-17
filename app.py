@@ -306,10 +306,10 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         ห้ามใส่เครื่องหมาย markdown block ส่งเฉพาะ Pure JSON
         """
 
+        # กำหนดใช้ 3.8 Flash เป็นหลัก และ 3.5 Flash Lite เป็นตัวสำรอง
         models_to_try = [
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-lite"
+            "gemini-3.8-flash",
+            "gemini-3.5-flash-lite"
         ]
         response = None
         last_error = None
