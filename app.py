@@ -7,6 +7,8 @@ import time
 from datetime import datetime, timedelta
 from docxtpl import DocxTemplate
 import docx
+from docx.oxml import parse_xml, OxmlElement
+from docx.oxml.ns import nsdecls, qn
 from google import genai
 from google.genai import types
 
@@ -20,7 +22,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ตกแต่ง UI ธีมสีสัน มีมิติ พรีเมียม
+# สไตล์ตกแต่ง UI สีสัน สดใส มีมิติ
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
@@ -102,7 +104,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ตรวจสอบสิทธิ์การเข้าใช้งาน
+# ระบบตรวจสอบรหัสผ่านปลดล็อก
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -136,7 +138,7 @@ if not st.session_state.authenticated:
         """, unsafe_allow_html=True)
     st.stop()
 
-# หน้าแอปพลิเคชันหลัก
+# ข้อมูลปฏิทินและแผนกวิชา
 THAI_MONTHS = [
     "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
     "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
@@ -158,7 +160,7 @@ DEPARTMENT_OPTIONS = [
 st.markdown("""
 <div class="main-header">
     <h1>📝 ระบบจัดทำบันทึกหลังการสอนอัตโนมัติ (AI Professional)</h1>
-    <p>วิเคราะห์โครงการสอน สกัดรายสัปดาห์ รองรับการฉีกคาบสูงสุด 4 คาบ และเรนเดอร์ลงแบบฟอร์มวิทยาลัยเป๊ะ 100%</p>
+    <p>สกัดโครงการสอนตามหลักวิชาการอาชีวศึกษา จัดรูปแบบต่อกันหน้าต่อหน้า ไร้หน้าว่าง 100%</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -272,21 +274,31 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
     status_text = st.empty()
 
     try:
-        status_text.text("🤖 กำลังส่งข้อมูลให้ Gemini AI วิเคราะห์โครงการสอน...")
+        status_text.text("🤖 กำลังส่งข้อมูลให้ Gemini AI วิเคราะห์โครงการสอนตามหลักวิชาการอาชีวศึกษา...")
         client = genai.Client(api_key=api_key)
         file_bytes = uploaded_file.read()
         mime_type = uploaded_file.type or "application/octet-stream"
 
         prompt = f"""
-        วิเคราะห์เนื้อหาโครงการสอนที่แนบมานี้ และจัดทำเนื้อหาบันทึกหลังการสอนอาชีวศึกษา
-        สำหรับระดับชั้น {class_level} ให้ครบถ้วนตั้งแต่สัปดาห์ที่ 1 ถึงสัปดาห์ที่ {target_weeks} (รวม {target_weeks} สัปดาห์พอดี ห้ามขาด)
+        คุณคือผู้เชี่ยวชาญด้านหลักสูตรและการจัดการเรียนรู้อาชีวศึกษา (สอศ.)
+        จงวิเคราะห์เนื้อหาโครงการสอนที่แนบมานี้ เพื่อจัดทำ "บันทึกหลังการจัดการเรียนรู้" ระดับชั้น {class_level}
+        ให้ครบถ้วนตั้งแต่สัปดาห์ที่ 1 ถึงสัปดาห์ที่ {target_weeks} (รวม {target_weeks} สัปดาห์พอดี ห้ามขาด)
         ข้อมูลวันหยุด/งดสอน: {holiday_text}
 
-        ข้อกำหนดสำคัญเพื่อไม่ให้หน้ากระดาษล้น:
-        1. topic: สรุปสั้นๆ 1 บรรทัด
-        2. student_eval: สรุปผลด้าน K, P, A และร้อยละผู้เรียนที่ผ่านเกณฑ์ ความยาว 1-2 บรรทัด
-        3. teacher_eval: สรุปกิจกรรมและสื่อที่ใช้ ความยาว 1-2 บรรทัด
-        4. problem_solution: สรุปปัญหาและวิธีแก้ไข ความยาว 1-2 บรรทัด
+        เกณฑ์การเขียนเชิงวิชาการที่เข้มข้น สมบูรณ์ และมีมิติ (ความยาวพอเหมาะ ไม่สั้นเกินไปและไม่ล้นหน้า):
+        1. topic: ระบุชื่อหน่วยการเรียนรู้ และสมรรถนะประจำหน่วย/หัวข้อการเรียนรู้อย่างชัดเจน
+        2. student_eval: ประเมินผลการเรียนรู้ของผู้เรียนอย่างเป็นรูปธรรม แยกมิติ K-P-A:
+           - ด้านความรู้ (K): ผู้เรียนมีความรู้ความเข้าใจในเนื้อหาผ่านเกณฑ์การประเมิน
+           - ด้านทักษะ/กระบวนการ (P): ผู้เรียนสามารถฝึกปฏิบัติงาน/ใบงานได้ถูกต้องตามขั้นตอน
+           - ด้านคุณลักษณะ (A): ผู้เรียนมีวินัย ความรับผิดชอบ และความตรงต่อเวลา
+           - สรุปตัวเลข: "มีผู้เรียนผ่านเกณฑ์การประเมินร้อยละ 85 ขึ้นไป (หรือสอดคล้องกับแต่ละสัปดาห์)"
+        3. teacher_eval: ผลการสอนของครู เน้นการจัดการเรียนรู้เชิงรุก (Active Learning):
+           - ระบุเทคนิคการสอน เช่น การจัดการเรียนรู้โดยใช้ปัญหาเป็นฐาน (Problem-based Learning), การสาธิตร่วมกับฝึกปฏิบัติ (Demonstration & Practice), การใช้เทคโนโลยีเป็นฐาน
+           - สื่อและนวัตกรรม: ระบุสื่อการสอน สื่อดิจิทัล ใบความรู้ ใบงานที่ใช้จริง
+           - การวัดและประเมินผล: ประเมินตามสภาพจริงผ่านแบบสังเกตพฤติกรรมและแบบประเมินผลงาน
+        4. problem_solution: ปัญหา อุปสรรค และแนวทางแก้ไขตามวงรอบคุณภาพ (PDCA):
+           - ปัญหา: ระบุปัญหาจริง เช่น ผู้เรียนบางคนยังขาดทักษะพื้นฐาน หรือสับสนขั้นตอนปฏิบัติ
+           - แนวทางแก้ไข: ระบุการสอนเสริม (Coaching) รายบุคคล, การจัดกลุ่มเพื่อนช่วยเพื่อน, มอบหมายใบงานซ่อมเสริมเพื่อพัฒนาสมรรถนะ
 
         ส่งออกเป็น Pure JSON โครงสร้างนี้เท่านั้น:
         {{
@@ -295,16 +307,16 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             "weeks": [
                 {{
                     "week": 1,
-                    "topic": "ชื่อหน่วยและเรื่องที่สอน",
+                    "topic": "ชื่อหน่วยและเรื่องที่จัดการเรียนรู้",
                     "is_holiday": false,
                     "off_reason": "-",
-                    "student_eval": "ผลด้านผู้เรียน",
-                    "teacher_eval": "ผลด้านผู้สอน",
-                    "problem_solution": "ปัญหาและแนวทางแก้ไข"
+                    "student_eval": "ข้อความประเมินผู้เรียนครบ K P A และร้อยละที่ผ่าน",
+                    "teacher_eval": "ข้อความการสอนเชิงรุก Active Learning สื่อ และการประเมิน",
+                    "problem_solution": "ข้อความปัญหาและแนวทางแก้ไขเชิงรูปธรรม"
                 }}
             ]
         }}
-        ห้ามใส่เครื่องหมาย markdown block ส่งเฉพาะ Pure JSON
+        ห้ามใส่เครื่องหมาย markdown block ส่งเฉพาะ Pure JSON เท่านั้น
         """
 
         models_to_try = [
@@ -325,7 +337,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
                     ],
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
-                        temperature=0.2
+                        temperature=0.25
                     )
                 )
                 if response and response.text:
@@ -358,12 +370,12 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             else:
                 final_weeks.append({
                     "week": i,
-                    "topic": f"หน่วยการเรียนรู้ที่ {i}",
+                    "topic": f"หน่วยการเรียนรู้ที่ {i} การประยุกต์ใช้สมรรถนะวิชาชีพตามโครงการสอน",
                     "is_holiday": False,
                     "off_reason": "-",
-                    "student_eval": "ผู้เรียนผ่านเกณฑ์ร้อยละ 90 ขึ้นไป มีทักษะและความตั้งใจในการปฏิบัติงาน",
-                    "teacher_eval": "จัดการเรียนรู้เชิงรุก (Active Learning) ผู้เรียนมีส่วนร่วมได้ดี",
-                    "problem_solution": "ให้คำแนะนำเพิ่มเติมแก่นักเรียนรายบุคคลหลังเลิกเรียน"
+                    "student_eval": "ผู้เรียนมีความรู้ความเข้าใจในหลักการ (K) สามารถฝึกปฏิบัติงานตามใบมอบหมายงานได้ถูกต้องตามขั้นตอน (P) มีความตั้งใจและรับผิดชอบต่องานที่ได้รับมอบหมาย (A) โดยมีผู้เรียนผ่านเกณฑ์การประเมินร้อยละ 90",
+                    "teacher_eval": "จัดการเรียนรู้เชิงรุก (Active Learning) ร่วมกับการสาธิตและฝึกปฏิบัติจริง ใช้สื่อการสอนดิจิทัลและใบงานประกอบ ผู้เรียนมีส่วนร่วมในการทำกิจกรรมเป็นอย่างดี มีการประเมินผลตามสภาพจริง",
+                    "problem_solution": "ผู้เรียนบางคนยังมีความสับสนในขั้นตอนการปฏิบัติงาน ได้ดำเนินการให้คำแนะนำรายบุคคล และจัดระบบเพื่อนช่วยเพื่อนในการทบทวนเนื้อหาเพิ่มเติม"
                 })
 
         tpl_bytes = tpl_file.read()
@@ -423,20 +435,51 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
 
             sub_doc = docx.Document(tmp_io)
 
-            # กำจัดย่อหน้าว่างท้ายเอกสารของ template เพื่อป้องกันการดันขึ้นหน้าใหม่
-            while len(sub_doc.paragraphs) > 0 and not sub_doc.paragraphs[-1].text.strip() and not sub_doc.paragraphs[-1]._element.xpath('.//w:drawing'):
-                p_elem = sub_doc.paragraphs[-1]._element
-                p_elem.getparent().remove(p_elem)
+            # กำจัดย่อหน้าว่างเปล่าท้ายเอกสารต้นฉบับทั้งหมด เพื่อไม่ให้เกิดการดันตกหน้า
+            while len(sub_doc.paragraphs) > 0:
+                last_p = sub_doc.paragraphs[-1]
+                if not last_p.text.strip() and not last_p._element.xpath('.//w:drawing'):
+                    p_elem = last_p._element
+                    p_elem.getparent().remove(p_elem)
+                else:
+                    break
 
             if merged_doc is None:
                 merged_doc = sub_doc
             else:
-                # ขึ้นหน้าใหม่ 1 ครั้งพอดีก่อนแทรกเนื้อหาของสัปดาห์ถัดไป
-                merged_doc.add_page_break()
+                # รวมเอกสารโดยต่อหน้าใหม่แบบไม่มีหน้าว่างคั่น (Pure Page Break)
+                is_first_block = True
                 for el in sub_doc.element.body:
                     if el.tag.endswith('sectPr'):
                         continue
-                    merged_doc.element.body.append(copy.deepcopy(el))
+                    copied_el = copy.deepcopy(el)
+
+                    if is_first_block:
+                        # สร้าง Page Break แบบแนบสนิท ไม่ทิ้งระยะบรรทัดว่าง
+                        p_break = OxmlElement('w:p')
+                        pPr = OxmlElement('w:pPr')
+                        pPr.append(OxmlElement('w:pageBreakBefore'))
+                        
+                        # กำหนดขนาดฟอนต์ 1pt และระยะบรรทัด 0 เพื่อไม่ให้กินพื้นที่แม้แต่มิลลิเมตรเดียว
+                        spacing = parse_xml(r'<w:spacing %s w:before="0" w:after="0" w:line="1" w:lineRule="exact"/>' % nsdecls('w'))
+                        rPr = parse_xml(r'<w:rPr %s><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr>' % nsdecls('w'))
+                        pPr.append(spacing)
+                        pPr.append(rPr)
+                        p_break.append(pPr)
+
+                        merged_doc.element.body.append(p_break)
+                        is_first_block = False
+
+                    merged_doc.element.body.append(copied_el)
+
+        # ลบ Section Break และ Empty Paragraph ท้ายเอกสารหลัก
+        while len(merged_doc.paragraphs) > 0:
+            final_p = merged_doc.paragraphs[-1]
+            if not final_p.text.strip() and not final_p._element.xpath('.//w:drawing'):
+                p_elem = final_p._element
+                p_elem.getparent().remove(p_elem)
+            else:
+                break
 
         output_stream = io.BytesIO()
         merged_doc.save(output_stream)
@@ -446,7 +489,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         status_text.empty()
 
         st.balloons()
-        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ เรียงต่อกันหน้าต่อหน้า ไม่มีหน้าว่าง 100%!")
+        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ ถูกต้องตามหลักวิชาการ ต่อเนื่องหน้าต่อหน้า ไร้หน้าว่าง 100%!")
         st.download_button(
             label="📥 ดาวน์โหลดไฟล์ Word (แบบฟอร์มวิทยาลัยตรงเป๊ะ)",
             data=output_stream,
