@@ -7,8 +7,6 @@ import time
 from datetime import datetime, timedelta
 from docxtpl import DocxTemplate
 import docx
-from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls
 from google import genai
 from google.genai import types
 
@@ -22,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# สไตล์ตกแต่ง UI สีสัน สดใส มีมิติ พร้อมกล่องลิขสิทธิ์
+# ตกแต่ง UI ธีมสีสัน มีมิติ พรีเมียม
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
@@ -104,7 +102,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ระบบตรวจสอบรหัสผ่านปลดล็อก
+# ตรวจสอบสิทธิ์การเข้าใช้งาน
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -133,12 +131,12 @@ if not st.session_state.authenticated:
         st.markdown("""
         <div class="footer-box" style="margin-top: 20px;">
             <div class="footer-badge">🛡️ PROPRIETARY SOFTWARE</div><br/>
-            © สงวนลิขสิทธิ์ พัฒนาโดย <b>นายณัฐวุฒิ หล้าปงสาย</b> ครูผู้ช่วย วิทยาลัยเทคนิคจันทบุรี
+            สงวนลิขสิทธิ์ พัฒนาโดย <b>นายณัฐวุฒิ หล้าปงสาย</b> ครูผู้ช่วย วิทยาลัยเทคนิคจันทบุรี
         </div>
         """, unsafe_allow_html=True)
     st.stop()
 
-# เมื่อปลดล็อกผ่าน เข้าสู่หน้าหลักของระบบ
+# หน้าแอปพลิเคชันหลัก
 THAI_MONTHS = [
     "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
     "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
@@ -187,7 +185,7 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("""
-    <div style="font-size: 12px; color: #94A3B8; text-align: center; margin-top: 25px;">
+    <div style="font-size: 12px; color: #94A3B8; text-align: center; margin-top: 25px; line-height: 1.6;">
         <b>AI Vocational Reflection System</b><br/>
         สงวนลิขสิทธิ์ พัฒนาโดย<br/>
         <b>นายณัฐวุฒิ หล้าปงสาย</b><br/>
@@ -425,30 +423,20 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
 
             sub_doc = docx.Document(tmp_io)
 
+            # กำจัดย่อหน้าว่างท้ายเอกสารของ template เพื่อป้องกันการดันขึ้นหน้าใหม่
+            while len(sub_doc.paragraphs) > 0 and not sub_doc.paragraphs[-1].text.strip() and not sub_doc.paragraphs[-1]._element.xpath('.//w:drawing'):
+                p_elem = sub_doc.paragraphs[-1]._element
+                p_elem.getparent().remove(p_elem)
+
             if merged_doc is None:
                 merged_doc = sub_doc
             else:
-                # รวมเอกสารโดยต่อหน้าใหม่แบบไม่มีหน้าว่างคั่น
-                first_element = True
+                # ขึ้นหน้าใหม่ 1 ครั้งพอดีก่อนแทรกเนื้อหาของสัปดาห์ถัดไป
+                merged_doc.add_page_break()
                 for el in sub_doc.element.body:
                     if el.tag.endswith('sectPr'):
                         continue
-                    copied_el = copy.deepcopy(el)
-                    if first_element:
-                        # บังคับให้องค์ประกอบแรกขึ้นหน้าใหม่ทันทีโดยไม่สร้างย่อหน้าเปล่า
-                        if copied_el.tag.endswith('p'):
-                            pPr = copied_el.find('{[http://schemas.openxmlformats.org/wordprocessingml/2006/main](http://schemas.openxmlformats.org/wordprocessingml/2006/main)}pPr')
-                            if pPr is None:
-                                pPr = parse_xml(r'<w:pPr %s><w:pageBreakBefore/></w:pPr>' % nsdecls('w'))
-                                copied_el.insert(0, pPr)
-                            else:
-                                pPr.append(parse_xml(r'<w:pageBreakBefore %s/>' % nsdecls('w')))
-                        elif copied_el.tag.endswith('tbl'):
-                            # ถ้าเป็นตาราง ให้แทรกตัวแบ่งหน้าบน Paragraph นำหน้าแบบแนบชิด
-                            p_break = parse_xml(r'<w:p %s><w:pPr><w:pageBreakBefore/><w:spacing w:after="0" w:before="0" w:line="1" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr></w:p>' % nsdecls('w'))
-                            merged_doc.element.body.append(p_break)
-                        first_element = False
-                    merged_doc.element.body.append(copied_el)
+                    merged_doc.element.body.append(copy.deepcopy(el))
 
         output_stream = io.BytesIO()
         merged_doc.save(output_stream)
