@@ -143,9 +143,14 @@ THAI_MONTHS = [
     "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
     "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
 ]
-DAY_NAMES = ["วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
+# ตัวเลือกวันสอน (มีตัวเลือก "-" ไว้สำหรับกรณีไม่ระบุหรือเว้นไว้)
+DAY_NAMES_WITH_NONE = ["-", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
+DAY_INDEX_MAP = {
+    "วันจันทร์": 0, "วันอังคาร": 1, "วันพุธ": 2, "วันพฤหัสบดี": 3,
+    "วันศุกร์": 4, "วันเสาร์": 5, "วันอาทิตย์": 6
+}
 
-# รายการช่วงเวลาเรียนแบบ 1 ชั่วโมง ไล่ตั้งแต่ 08.30 จนถึง 16.30 น.
+# รายการช่วงเวลาเรียนแบบ 1 ชั่วโมง ตั้งแต่ 08.30 ถึง 20.30 น.
 TIME_PRESETS = [
     "08.30-09.30 น.",
     "09.30-10.30 น.",
@@ -155,11 +160,10 @@ TIME_PRESETS = [
     "13.30-14.30 น.",
     "14.30-15.30 น.",
     "15.30-16.30 น.",
-    "08.30-10.30 น.",
-    "10.30-12.30 น.",
-    "13.30-15.30 น.",
-    "13.30-16.30 น.",
-    "08.30-12.30 น."
+    "16.30-17.30 น.",
+    "17.30-18.30 น.",
+    "18.30-19.30 น.",
+    "19.30-20.30 น."
 ]
 
 DEPARTMENT_OPTIONS = [
@@ -246,14 +250,20 @@ with col2:
     )
 
     slots_info = []
-    default_days = [0, 0, 1, 2]
+    # ค่าเริ่มต้น: คาบแรกเลือกวันจันทร์ (index 1), คาบถัดไปสามารถเลือกวันอื่นหรือเลือก '-' ได้
+    default_days_idx = [1, 1, 2, 3]
     default_times_idx = [0, 1, 2, 3]
 
     for i in range(slots_count):
         st.markdown(f"**📌 รายละเอียดคาบที่ {i+1}:**")
         sc1, sc2 = st.columns(2)
         with sc1:
-            d_val = st.selectbox(f"วัน (คาบที่ {i+1}):", DAY_NAMES, index=default_days[i % len(default_days)], key=f"day_slot_{i}")
+            d_val = st.selectbox(
+                f"วัน (คาบที่ {i+1}):",
+                DAY_NAMES_WITH_NONE,
+                index=default_days_idx[i % len(default_days_idx)],
+                key=f"day_slot_{i}"
+            )
         with sc2:
             t_val = st.selectbox(
                 f"เวลา (คาบที่ {i+1}):",
@@ -275,7 +285,9 @@ def format_thai_date(dt):
     d = dt.day
     m = THAI_MONTHS[dt.month]
     y = dt.year + 543
-    day_name = DAY_NAMES[dt.weekday()]
+    # รายชื่อวันภาษาไทย
+    thai_days = ["วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
+    day_name = thai_days[dt.weekday()]
     return f"{day_name} {d} {m} {y}"
 
 if st.button(f"🚀 เริ่มสร้างเอกสารบันทึกหลังการสอนครบ {target_weeks} สัปดาห์", use_container_width=True):
@@ -404,7 +416,6 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         tpl_bytes = tpl_file.read()
         merged_doc = None
         total_count = len(final_weeks)
-        day_map = {name: idx for idx, name in enumerate(DAY_NAMES)}
 
         for idx, w in enumerate(final_weeks):
             progress_bar.progress(int(((idx + 1) / total_count) * 100))
@@ -413,9 +424,16 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             week_num = w.get("week", idx + 1)
             base_week_date = start_date + timedelta(weeks=(week_num - 1))
             
-            # จัดกลุ่มคาบสอนตามวัน เพื่อไม่ให้วันเดียวกันแสดงซ้ำซ้อนหลายบรรทัด
+            # กรองเฉพาะคาบที่มีการเลือกวันจริง (ตัดกรณีเลือก '-' ออก)
+            valid_slots = [s for s in slots_info if s["day"] != "-" and s["day"] in DAY_INDEX_MAP]
+            
+            # ถ้าไม่ได้เลือกวันไว้เลย ให้ใช้วันจันทร์เป็นค่าเริ่มต้นสำรอง
+            if not valid_slots:
+                valid_slots = [{"day": "วันจันทร์", "time": slots_info[0]["time"] if slots_info else "08.30-09.30 น."}]
+
+            # จัดกลุ่มคาบสอนตามวัน เพื่อไม่ให้วันเดียวกันแตกเป็นหลายบรรทัด
             days_grouped = {}
-            for slot in slots_info:
+            for slot in valid_slots:
                 d_name = slot["day"]
                 t_val = slot["time"]
                 if d_name not in days_grouped:
@@ -425,10 +443,9 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             date_lines = []
             time_lines = []
             for d_name, t_list in days_grouped.items():
-                t_wday = day_map.get(d_name, 0)
+                t_wday = DAY_INDEX_MAP.get(d_name, 0)
                 dt_slot = base_week_date + timedelta(days=(t_wday - base_week_date.weekday()))
                 date_lines.append(format_thai_date(dt_slot))
-                # รวมช่วงเวลาในวันเดียวกัน เช่น "13.30-14.30 น., 14.30-15.30 น."
                 time_lines.append(", ".join(t_list))
 
             date_display = "\n".join(date_lines)
