@@ -7,8 +7,6 @@ import time
 from datetime import datetime, timedelta
 from docxtpl import DocxTemplate
 import docx
-from docx.oxml import parse_xml, OxmlElement
-from docx.oxml.ns import nsdecls
 from google import genai
 from google.genai import types
 
@@ -138,7 +136,7 @@ if not st.session_state.authenticated:
         """, unsafe_allow_html=True)
     st.stop()
 
-# ปฏิทินและแผนกวิชา
+# ข้อมูลปฏิทินและแผนกวิชา
 THAI_MONTHS = [
     "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
     "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
@@ -160,7 +158,7 @@ DEPARTMENT_OPTIONS = [
 st.markdown("""
 <div class="main-header">
     <h1>📝 ระบบจัดทำบันทึกหลังการสอนอัตโนมัติ (AI Professional)</h1>
-    <p>สกัดโครงการสอนตามหลักวิชาการอาชีวศึกษา จัดรูปแบบต่อกันหน้าต่อหน้า ไร้หน้าว่าง 100%</p>
+    <p>วิเคราะห์โครงการสอน สกัดรายสัปดาห์ จัดกลุ่มวันและเวลาอัตโนมัติ ไร้หน้าว่าง 100%</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -390,7 +388,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             week_num = w.get("week", idx + 1)
             base_week_date = start_date + timedelta(weeks=(week_num - 1))
             
-            # รวมวันเดียวกันให้อัตโนมัติ เพื่อไม่ให้วันแสดงซ้ำหลายบรรทัด
+            # รวมวันเดียวกันให้อัตโนมัติ เพื่อไม่ให้แสดงวันซ้ำ 3 บรรทัด
             days_grouped = {}
             for slot in slots_info:
                 d_name = slot["day"]
@@ -456,35 +454,11 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             if merged_doc is None:
                 merged_doc = sub_doc
             else:
-                is_first_block = True
+                merged_doc.add_page_break()
                 for el in sub_doc.element.body:
                     if el.tag.endswith('sectPr'):
                         continue
-                    copied_el = copy.deepcopy(el)
-
-                    if is_first_block:
-                        p_break = OxmlElement('w:p')
-                        pPr = OxmlElement('w:pPr')
-                        pPr.append(OxmlElement('w:pageBreakBefore'))
-                        
-                        spacing = parse_xml(r'<w:spacing %s w:before="0" w:after="0" w:line="1" w:lineRule="exact"/>' % nsdecls('w'))
-                        rPr = parse_xml(r'<w:rPr %s><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr>' % nsdecls('w'))
-                        pPr.append(spacing)
-                        pPr.append(rPr)
-                        p_break.append(pPr)
-
-                        merged_doc.element.body.append(p_break)
-                        is_first_block = False
-
-                    merged_doc.element.body.append(copied_el)
-
-        while len(merged_doc.paragraphs) > 0:
-            final_p = merged_doc.paragraphs[-1]
-            if not final_p.text.strip() and not final_p._element.xpath('.//w:drawing'):
-                p_elem = final_p._element
-                p_elem.getparent().remove(p_elem)
-            else:
-                break
+                    merged_doc.element.body.append(copy.deepcopy(el))
 
         output_stream = io.BytesIO()
         merged_doc.save(output_stream)
@@ -494,7 +468,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         status_text.empty()
 
         st.balloons()
-        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ ต่อเนื่องไร้หน้าว่าง 100%!")
+        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ เรียงต่อกันหน้าต่อหน้า ไร้หน้าว่าง 100%!")
         st.download_button(
             label="📥 ดาวน์โหลดไฟล์ Word (แบบฟอร์มวิทยาลัยตรงเป๊ะ)",
             data=output_stream,
