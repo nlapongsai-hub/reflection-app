@@ -7,6 +7,8 @@ import time
 from datetime import datetime, timedelta
 from docxtpl import DocxTemplate
 import docx
+from docx.oxml import parse_xml, OxmlElement
+from docx.oxml.ns import nsdecls, qn
 from google import genai
 from google.genai import types
 
@@ -158,7 +160,7 @@ DEPARTMENT_OPTIONS = [
 st.markdown("""
 <div class="main-header">
     <h1>📝 ระบบจัดทำบันทึกหลังการสอนอัตโนมัติ (AI Professional)</h1>
-    <p>วิเคราะห์โครงการสอน สกัดรายสัปดาห์ จัดกลุ่มวันและเวลาอัตโนมัติ ไร้หน้าว่าง 100%</p>
+    <p>สกัดโครงการสอนตามหลักวิชาการอาชีวศึกษา จัดรูปแบบต่อกันหน้าต่อหน้า ไร้หน้าว่าง 100%</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -221,13 +223,13 @@ with col2:
     slots_count = st.selectbox(
         "จำนวนคาบสอนใน 1 สัปดาห์ (ฉีกคาบได้สูงสุด 4 คาบ):",
         options=[1, 2, 3, 4],
-        format_func=lambda x: f"สอน {x} คาบ / สัปดาห์" if x > 1 else "สอน 1 คาบ (รวดเดียว)",
-        index=0
+        format_func=lambda x: f"สอน {x} คาบ / สัปดาห์" if x > 1 else "สอน 1 คาบ (วันเดียวจบ)",
+        index=1
     )
 
     slots_info = []
     default_days = [0, 1, 2, 3]
-    default_times = ["08.30-10.30 น.", "10.30-12.30 น.", "13.30-15.30 น.", "15.30-16.30 น."]
+    default_times = ["15.30-16.30 น.", "08.30-10.30 น.", "10.30-12.30 น.", "13.30-15.30 น."]
 
     for i in range(slots_count):
         st.markdown(f"**📌 รายละเอียดคาบที่ {i+1}:**")
@@ -283,7 +285,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         ให้ครบถ้วนตั้งแต่สัปดาห์ที่ 1 ถึงสัปดาห์ที่ {target_weeks} (รวม {target_weeks} สัปดาห์พอดี ห้ามขาด)
         ข้อมูลวันหยุด/งดสอน: {holiday_text}
 
-        เกณฑ์การเขียนเชิงวิชาการที่เข้มข้น สมบูรณ์ และมีมิติ:
+        เกณฑ์การเขียนเชิงวิชาการที่เข้มข้น สมบูรณ์ และมีมิติ (ความยาวพอเหมาะ ไม่สั้นเกินไปและไม่ล้นหน้า):
         1. topic: ระบุชื่อหน่วยการเรียนรู้ และสมรรถนะประจำหน่วย/หัวข้อการเรียนรู้อย่างชัดเจน
         2. student_eval: ประเมินผลการเรียนรู้ของผู้เรียนอย่างเป็นรูปธรรม แยกมิติ K-P-A:
            - ด้านความรู้ (K): ผู้เรียนมีความรู้ความเข้าใจในเนื้อหาผ่านเกณฑ์การประเมิน
@@ -291,7 +293,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
            - ด้านคุณลักษณะ (A): ผู้เรียนมีวินัย ความรับผิดชอบ และความตรงต่อเวลา
            - สรุปตัวเลข: "มีผู้เรียนผ่านเกณฑ์การประเมินร้อยละ 85 ขึ้นไป (หรือสอดคล้องกับแต่ละสัปดาห์)"
         3. teacher_eval: ผลการสอนของครู เน้นการจัดการเรียนรู้เชิงรุก (Active Learning):
-           - ระบุเทคนิคการสอน เช่น การจัดการเรียนรู้โดยใช้ปัญหาเป็นฐาน, การสาธิตร่วมกับฝึกปฏิบัติ
+           - ระบุเทคนิคการสอน เช่น การจัดการเรียนรู้โดยใช้ปัญหาเป็นฐาน (Problem-based Learning), การสาธิตร่วมกับฝึกปฏิบัติ (Demonstration & Practice), การใช้เทคโนโลยีเป็นฐาน
            - สื่อและนวัตกรรม: ระบุสื่อการสอน สื่อดิจิทัล ใบความรู้ ใบงานที่ใช้จริง
            - การวัดและประเมินผล: ประเมินตามสภาพจริงผ่านแบบสังเกตพฤติกรรมและแบบประเมินผลงาน
         4. problem_solution: ปัญหา อุปสรรค และแนวทางแก้ไขตามวงรอบคุณภาพ (PDCA):
@@ -388,22 +390,13 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             week_num = w.get("week", idx + 1)
             base_week_date = start_date + timedelta(weeks=(week_num - 1))
             
-            # รวมวันเดียวกันให้อัตโนมัติ เพื่อไม่ให้แสดงวันซ้ำ 3 บรรทัด
-            days_grouped = {}
-            for slot in slots_info:
-                d_name = slot["day"]
-                t_val = slot["time"].strip()
-                if d_name not in days_grouped:
-                    days_grouped[d_name] = []
-                days_grouped[d_name].append(t_val)
-
             date_lines = []
             time_lines = []
-            for d_name, t_list in days_grouped.items():
-                t_wday = day_map.get(d_name, 0)
+            for slot in slots_info:
+                t_wday = day_map.get(slot["day"], 0)
                 dt_slot = base_week_date + timedelta(days=(t_wday - base_week_date.weekday()))
                 date_lines.append(format_thai_date(dt_slot))
-                time_lines.append(", ".join(t_list))
+                time_lines.append(f"เวลา {slot['time']}")
 
             date_display = "\n".join(date_lines)
             time_display = "\n".join(time_lines)
@@ -442,7 +435,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
 
             sub_doc = docx.Document(tmp_io)
 
-            # ลบย่อหน้าเปล่าท้ายเอกสาร
+            # กำจัดย่อหน้าว่างเปล่าท้ายเอกสารต้นฉบับทั้งหมด เพื่อไม่ให้เกิดการดันตกหน้า
             while len(sub_doc.paragraphs) > 0:
                 last_p = sub_doc.paragraphs[-1]
                 if not last_p.text.strip() and not last_p._element.xpath('.//w:drawing'):
@@ -454,11 +447,39 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             if merged_doc is None:
                 merged_doc = sub_doc
             else:
-                merged_doc.add_page_break()
+                # รวมเอกสารโดยต่อหน้าใหม่แบบไม่มีหน้าว่างคั่น (Pure Page Break)
+                is_first_block = True
                 for el in sub_doc.element.body:
                     if el.tag.endswith('sectPr'):
                         continue
-                    merged_doc.element.body.append(copy.deepcopy(el))
+                    copied_el = copy.deepcopy(el)
+
+                    if is_first_block:
+                        # สร้าง Page Break แบบแนบสนิท ไม่ทิ้งระยะบรรทัดว่าง
+                        p_break = OxmlElement('w:p')
+                        pPr = OxmlElement('w:pPr')
+                        pPr.append(OxmlElement('w:pageBreakBefore'))
+                        
+                        # กำหนดขนาดฟอนต์ 1pt และระยะบรรทัด 0 เพื่อไม่ให้กินพื้นที่แม้แต่มิลลิเมตรเดียว
+                        spacing = parse_xml(r'<w:spacing %s w:before="0" w:after="0" w:line="1" w:lineRule="exact"/>' % nsdecls('w'))
+                        rPr = parse_xml(r'<w:rPr %s><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr>' % nsdecls('w'))
+                        pPr.append(spacing)
+                        pPr.append(rPr)
+                        p_break.append(pPr)
+
+                        merged_doc.element.body.append(p_break)
+                        is_first_block = False
+
+                    merged_doc.element.body.append(copied_el)
+
+        # ลบ Section Break และ Empty Paragraph ท้ายเอกสารหลัก
+        while len(merged_doc.paragraphs) > 0:
+            final_p = merged_doc.paragraphs[-1]
+            if not final_p.text.strip() and not final_p._element.xpath('.//w:drawing'):
+                p_elem = final_p._element
+                p_elem.getparent().remove(p_elem)
+            else:
+                break
 
         output_stream = io.BytesIO()
         merged_doc.save(output_stream)
@@ -468,7 +489,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         status_text.empty()
 
         st.balloons()
-        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ เรียงต่อกันหน้าต่อหน้า ไร้หน้าว่าง 100%!")
+        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ ถูกต้องตามหลักวิชาการ ต่อเนื่องหน้าต่อหน้า ไร้หน้าว่าง 100%!")
         st.download_button(
             label="📥 ดาวน์โหลดไฟล์ Word (แบบฟอร์มวิทยาลัยตรงเป๊ะ)",
             data=output_stream,
