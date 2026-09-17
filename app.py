@@ -138,34 +138,12 @@ if not st.session_state.authenticated:
         """, unsafe_allow_html=True)
     st.stop()
 
-# ข้อมูลปฏิทิน แผนกวิชา และช่วงเวลาเรียน
+# ปฏิทินและแผนกวิชา
 THAI_MONTHS = [
     "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
     "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
 ]
-# ตัวเลือกวันสอน (มีตัวเลือก "-" ไว้สำหรับกรณีไม่ระบุหรือเว้นไว้)
-DAY_NAMES_WITH_NONE = ["-", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
-DAY_INDEX_MAP = {
-    "วันจันทร์": 0, "วันอังคาร": 1, "วันพุธ": 2, "วันพฤหัสบดี": 3,
-    "วันศุกร์": 4, "วันเสาร์": 5, "วันอาทิตย์": 6
-}
-
-# รายการช่วงเวลาเรียนแบบ 1 ชั่วโมง ตั้งแต่ 08.30 ถึง 20.30 น.
-TIME_PRESETS = [
-    "08.30-09.30 น.",
-    "09.30-10.30 น.",
-    "10.30-11.30 น.",
-    "11.30-12.30 น.",
-    "12.30-13.30 น.",
-    "13.30-14.30 น.",
-    "14.30-15.30 น.",
-    "15.30-16.30 น.",
-    "16.30-17.30 น.",
-    "17.30-18.30 น.",
-    "18.30-19.30 น.",
-    "19.30-20.30 น."
-]
-
+DAY_NAMES = ["วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
 DEPARTMENT_OPTIONS = [
     "การจัดการโลจิสติกส์และซัพพลายเชน",
     "เทคโนโลยีสารสนเทศ",
@@ -182,7 +160,7 @@ DEPARTMENT_OPTIONS = [
 st.markdown("""
 <div class="main-header">
     <h1>📝 ระบบจัดทำบันทึกหลังการสอนอัตโนมัติ (AI Professional)</h1>
-    <p>วิเคราะห์โครงการสอน สกัดรายสัปดาห์ จัดกลุ่มวันและเวลาอัตโนมัติ ไร้หน้าว่าง 100%</p>
+    <p>สกัดโครงการสอนตามหลักวิชาการอาชีวศึกษา จัดรูปแบบต่อกันหน้าต่อหน้า ไร้หน้าว่าง 100%</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -243,34 +221,23 @@ with col1:
 with col2:
     st.subheader("⏰ 2. ตารางวัน-เวลา และการฉีกคาบสอน")
     slots_count = st.selectbox(
-        "จำนวนคาบ/ช่วงเวลาใน 1 สัปดาห์ (ฉีกคาบได้สูงสุด 4 คาบ):",
+        "จำนวนคาบสอนใน 1 สัปดาห์ (ฉีกคาบได้สูงสุด 4 คาบ):",
         options=[1, 2, 3, 4],
         format_func=lambda x: f"สอน {x} คาบ / สัปดาห์" if x > 1 else "สอน 1 คาบ (รวดเดียว)",
         index=0
     )
 
     slots_info = []
-    # ค่าเริ่มต้น: คาบแรกเลือกวันจันทร์ (index 1), คาบถัดไปสามารถเลือกวันอื่นหรือเลือก '-' ได้
-    default_days_idx = [1, 1, 2, 3]
-    default_times_idx = [0, 1, 2, 3]
+    default_days = [0, 1, 2, 3]
+    default_times = ["08.30-10.30 น.", "10.30-12.30 น.", "13.30-15.30 น.", "15.30-16.30 น."]
 
     for i in range(slots_count):
         st.markdown(f"**📌 รายละเอียดคาบที่ {i+1}:**")
         sc1, sc2 = st.columns(2)
         with sc1:
-            d_val = st.selectbox(
-                f"วัน (คาบที่ {i+1}):",
-                DAY_NAMES_WITH_NONE,
-                index=default_days_idx[i % len(default_days_idx)],
-                key=f"day_slot_{i}"
-            )
+            d_val = st.selectbox(f"วัน (คาบที่ {i+1}):", DAY_NAMES, index=default_days[i % len(default_days)], key=f"day_slot_{i}")
         with sc2:
-            t_val = st.selectbox(
-                f"เวลา (คาบที่ {i+1}):",
-                TIME_PRESETS,
-                index=default_times_idx[i % len(default_times_idx)],
-                key=f"time_slot_{i}"
-            )
+            t_val = st.text_input(f"เวลา (คาบที่ {i+1}):", value=default_times[i % len(default_times)], key=f"time_slot_{i}")
         slots_info.append({"day": d_val, "time": t_val})
 
     start_date = st.date_input("📅 วันที่เริ่มสอนสัปดาห์ที่ 1 (คำนวณปฏิทินไทยอัตโนมัติ):")
@@ -285,9 +252,7 @@ def format_thai_date(dt):
     d = dt.day
     m = THAI_MONTHS[dt.month]
     y = dt.year + 543
-    # รายชื่อวันภาษาไทย
-    thai_days = ["วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
-    day_name = thai_days[dt.weekday()]
+    day_name = DAY_NAMES[dt.weekday()]
     return f"{day_name} {d} {m} {y}"
 
 if st.button(f"🚀 เริ่มสร้างเอกสารบันทึกหลังการสอนครบ {target_weeks} สัปดาห์", use_container_width=True):
@@ -320,7 +285,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         ให้ครบถ้วนตั้งแต่สัปดาห์ที่ 1 ถึงสัปดาห์ที่ {target_weeks} (รวม {target_weeks} สัปดาห์พอดี ห้ามขาด)
         ข้อมูลวันหยุด/งดสอน: {holiday_text}
 
-        เกณฑ์การเขียนเชิงวิชาการที่เข้มข้น สมบูรณ์ และมีมิติ (ความยาวพอเหมาะ ไม่สั้นเกินไปและไม่ล้นหน้า):
+        เกณฑ์การเขียนเชิงวิชาการที่เข้มข้น สมบูรณ์ และมีมิติ:
         1. topic: ระบุชื่อหน่วยการเรียนรู้ และสมรรถนะประจำหน่วย/หัวข้อการเรียนรู้อย่างชัดเจน
         2. student_eval: ประเมินผลการเรียนรู้ของผู้เรียนอย่างเป็นรูปธรรม แยกมิติ K-P-A:
            - ด้านความรู้ (K): ผู้เรียนมีความรู้ความเข้าใจในเนื้อหาผ่านเกณฑ์การประเมิน
@@ -328,7 +293,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
            - ด้านคุณลักษณะ (A): ผู้เรียนมีวินัย ความรับผิดชอบ และความตรงต่อเวลา
            - สรุปตัวเลข: "มีผู้เรียนผ่านเกณฑ์การประเมินร้อยละ 85 ขึ้นไป (หรือสอดคล้องกับแต่ละสัปดาห์)"
         3. teacher_eval: ผลการสอนของครู เน้นการจัดการเรียนรู้เชิงรุก (Active Learning):
-           - ระบุเทคนิคการสอน เช่น การจัดการเรียนรู้โดยใช้ปัญหาเป็นฐาน (Problem-based Learning), การสาธิตร่วมกับฝึกปฏิบัติ (Demonstration & Practice), การใช้เทคโนโลยีเป็นฐาน
+           - ระบุเทคนิคการสอน เช่น การจัดการเรียนรู้โดยใช้ปัญหาเป็นฐาน, การสาธิตร่วมกับฝึกปฏิบัติ
            - สื่อและนวัตกรรม: ระบุสื่อการสอน สื่อดิจิทัล ใบความรู้ ใบงานที่ใช้จริง
            - การวัดและประเมินผล: ประเมินตามสภาพจริงผ่านแบบสังเกตพฤติกรรมและแบบประเมินผลงาน
         4. problem_solution: ปัญหา อุปสรรค และแนวทางแก้ไขตามวงรอบคุณภาพ (PDCA):
@@ -416,6 +381,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         tpl_bytes = tpl_file.read()
         merged_doc = None
         total_count = len(final_weeks)
+        day_map = {name: idx for idx, name in enumerate(DAY_NAMES)}
 
         for idx, w in enumerate(final_weeks):
             progress_bar.progress(int(((idx + 1) / total_count) * 100))
@@ -424,18 +390,11 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             week_num = w.get("week", idx + 1)
             base_week_date = start_date + timedelta(weeks=(week_num - 1))
             
-            # กรองเฉพาะคาบที่มีการเลือกวันจริง (ตัดกรณีเลือก '-' ออก)
-            valid_slots = [s for s in slots_info if s["day"] != "-" and s["day"] in DAY_INDEX_MAP]
-            
-            # ถ้าไม่ได้เลือกวันไว้เลย ให้ใช้วันจันทร์เป็นค่าเริ่มต้นสำรอง
-            if not valid_slots:
-                valid_slots = [{"day": "วันจันทร์", "time": slots_info[0]["time"] if slots_info else "08.30-09.30 น."}]
-
-            # จัดกลุ่มคาบสอนตามวัน เพื่อไม่ให้วันเดียวกันแตกเป็นหลายบรรทัด
+            # รวมวันเดียวกันให้อัตโนมัติ เพื่อไม่ให้วันแสดงซ้ำหลายบรรทัด
             days_grouped = {}
-            for slot in valid_slots:
+            for slot in slots_info:
                 d_name = slot["day"]
-                t_val = slot["time"]
+                t_val = slot["time"].strip()
                 if d_name not in days_grouped:
                     days_grouped[d_name] = []
                 days_grouped[d_name].append(t_val)
@@ -443,7 +402,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             date_lines = []
             time_lines = []
             for d_name, t_list in days_grouped.items():
-                t_wday = DAY_INDEX_MAP.get(d_name, 0)
+                t_wday = day_map.get(d_name, 0)
                 dt_slot = base_week_date + timedelta(days=(t_wday - base_week_date.weekday()))
                 date_lines.append(format_thai_date(dt_slot))
                 time_lines.append(", ".join(t_list))
@@ -485,7 +444,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
 
             sub_doc = docx.Document(tmp_io)
 
-            # ลบย่อหน้าว่างเปล่าท้ายหน้าของแต่ละสัปดาห์
+            # ลบย่อหน้าเปล่าท้ายเอกสาร
             while len(sub_doc.paragraphs) > 0:
                 last_p = sub_doc.paragraphs[-1]
                 if not last_p.text.strip() and not last_p._element.xpath('.//w:drawing'):
@@ -497,7 +456,6 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             if merged_doc is None:
                 merged_doc = sub_doc
             else:
-                # ขึ้นหน้าใหม่แบบไม่เพิ่มย่อหน้าว่างคั่น
                 is_first_block = True
                 for el in sub_doc.element.body:
                     if el.tag.endswith('sectPr'):
@@ -520,7 +478,6 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
 
                     merged_doc.element.body.append(copied_el)
 
-        # ลบย่อหน้าว่างท้ายสุดของเอกสารรวม
         while len(merged_doc.paragraphs) > 0:
             final_p = merged_doc.paragraphs[-1]
             if not final_p.text.strip() and not final_p._element.xpath('.//w:drawing'):
@@ -537,7 +494,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         status_text.empty()
 
         st.balloons()
-        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ จัดกลุ่มวัน-เวลาเรียบร้อย ต่อเนื่องไร้หน้าว่าง 100%!")
+        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ ต่อเนื่องไร้หน้าว่าง 100%!")
         st.download_button(
             label="📥 ดาวน์โหลดไฟล์ Word (แบบฟอร์มวิทยาลัยตรงเป๊ะ)",
             data=output_stream,
