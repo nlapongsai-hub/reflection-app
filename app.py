@@ -31,12 +31,10 @@ st.markdown("""
         font-family: 'Sarabun', sans-serif !important;
     }
 
-    /* พื้นหลังหลักของเว็บ */
     .stApp {
         background-color: #f8fafc;
     }
 
-    /* Header Bar ด้านบน */
     .top-navbar {
         display: flex;
         justify-content: space-between;
@@ -80,7 +78,6 @@ st.markdown("""
         font-weight: 500;
     }
 
-    /* กล่องการ์ดเนื้อหา */
     .dashboard-card {
         background: #ffffff;
         border-radius: 18px;
@@ -99,7 +96,6 @@ st.markdown("""
         gap: 8px;
     }
 
-    /* ปรับแต่งปุ่ม Action Button */
     div.stButton > button:first-child {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
         color: white !important;
@@ -117,7 +113,6 @@ st.markdown("""
         transform: translateY(-1px) !important;
     }
 
-    /* ปรับแต่งปุ่มดาวน์โหลด */
     div.stDownloadButton > button {
         background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
         color: white !important;
@@ -129,12 +124,16 @@ st.markdown("""
         box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35) !important;
     }
 
-    /* ซ่อนแถบ Header ส่วนเกินของ Streamlit */
     header[data-testid="stHeader"] {
         background-color: transparent !important;
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ==========================================
+# กำหนดรหัสผ่านปลดล็อคระบบ
+# ==========================================
+CORRECT_ACCESS_CODE = "086344"
 
 # ==========================================
 # TOP BAR / HEADER
@@ -152,10 +151,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# SIDEBAR: การตั้งค่าระบบ
+# SIDEBAR: การตั้งค่าระบบ และ ตรวจสอบรหัสผ่าน
 # ==========================================
 with st.sidebar:
-    st.markdown("### ⚙️ การตั้งค่าระบบ AI")
+    st.markdown("### 🔒 สิทธิ์เข้าใช้งานระบบ")
+    access_code = st.text_input("กรอกรหัสยืนยันจากผู้พัฒนา:", type="password", placeholder="ใส่รหัสผ่าน 6 หลัก...")
+    
+    is_authenticated = False
+    if access_code:
+        if access_code == CORRECT_ACCESS_CODE:
+            st.success("✅ รหัสผ่านถูกต้อง ยินดีต้อนรับ")
+            is_authenticated = True
+        else:
+            st.error("❌ รหัสผ่านไม่ถูกต้อง กรุณาติดต่อผู้พัฒนา")
+    else:
+        st.info("ℹ️ กรุณากรอกรหัสผ่านเพื่อเริ่มใช้งาน")
+
+    st.markdown("---")
+    st.markdown("### ⚙️ การตั้งค่า AI")
     api_key_input = st.text_input("🔑 Gemini API Key:", type="password", placeholder="AIzaSy...")
     st.caption("[คลิกที่นี่เพื่อขอรับ API Key ฟรีจาก Google AI Studio](https://aistudio.google.com/apikey)")
     
@@ -166,7 +179,28 @@ with st.sidebar:
     time_slot = st.text_input("ช่วงเวลาเรียน:", value="08.30 - 10.30 น.")
 
 # ==========================================
-# MAIN INTERFACE: การ์ดทำงาน
+# ตรวจสอบสิทธิ์ก่อนแสดงหน้าทำงาน (Gatekeeper)
+# ==========================================
+if not is_authenticated:
+    st.warning("🔒 **ระบบถูกล็อกไว้เฉพาะบุคลากรที่ได้รับอนุญาต**")
+    st.info("กรุณากรอกรหัสผ่าน 6 หลัก ที่แถบด้านซ้ายมือเพื่อปลดล็อกเข้าใช้งานระบบ\n\n*(หากยังไม่มีรหัส กรุณาติดต่อ: นายณัฐวุฒิ หล้าปงสาย ครูผู้ช่วย วิทยาลัยเทคนิคจันทบุรี)*")
+    
+    # แสดงเครดิตผู้พัฒนาด่านล่าง
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="text-align: center; color: #64748b; font-size: 14.5px; line-height: 1.8; margin-top: 15px; margin-bottom: 25px;">
+            พัฒนาโดย <strong style="color: #334155;">นายณัฐวุฒิ หล้าปงสาย</strong><br>
+            ครูผู้ช่วย วิทยาลัยเทคนิคจันทบุรี
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    st.stop()
+
+# ==========================================
+# MAIN INTERFACE (แสดงเมื่อปลดล็อกรหัสผ่านแล้ว)
 # ==========================================
 col1, col2 = st.columns([1.1, 0.9], gap="large")
 
@@ -224,22 +258,29 @@ if st.button("🚀 เริ่มวิเคราะห์และสร้�
     status_text = st.empty()
 
     try:
-        status_text.text("กำลังส่งข้อมูลให้ Gemini AI วิเคราะห์โครงการสอน...")
+        status_text.text("กำลังส่งข้อมูลให้ Gemini AI วิเคราะห์โครงการสอนตามหลักวิชาการ...")
         client = genai.Client(api_key=api_key)
         file_bytes = uploaded_file.read()
         mime_type = uploaded_file.type or "application/octet-stream"
 
         prompt = f"""
-        วิเคราะห์เนื้อหาโครงการสอนที่แนบมานี้ และจัดทำเนื้อหาบันทึกหลังการสอนอาชีวศึกษา
+        วิเคราะห์เนื้อหาโครงการสอนที่แนบมานี้ และจัดทำเนื้อหาบันทึกหลังการสอนอาชีวศึกษาเชิงลึกตามหลักวิชาการ
         สำหรับระดับชั้น {level_type} ให้ครบถ้วนตั้งแต่สัปดาห์ที่ 1 ถึงสัปดาห์ที่ {target_weeks} (รวม {target_weeks} สัปดาห์พอดี ห้ามขาด)
         ช่วงเวลาสอน: {time_slot}
         ข้อมูลวันหยุด/งดสอน: {holiday_text}
 
-        ข้อกำหนดสำคัญเพื่อความกระชับและไม่ให้หน้ากระดาษล้น:
-        1. topic: เขียนให้กระชับ ชัดเจน ไม่เกิน 1 บรรทัด
-        2. student_eval: สรุปผลด้าน K, P, A และร้อยละผู้เรียนที่ผ่านเกณฑ์ ความยาว 1-2 บรรทัด
-        3. teacher_eval: สรุปกิจกรรมและสื่อที่ใช้ ความยาว 1-2 บรรทัด
-        4. problem_solution: สรุปปัญหาและวิธีแก้ไข ความยาว 1-2 บรรทัด
+        แนวทางการเขียนเชิงวิชาการ (เขียนให้อ่านเป็นมืออาชีพ ลึกซึ้ง และกะทัดรัด จบใน 2-3 บรรทัดต่อข้อ เพื่อไม่ให้ล้นหน้า):
+        1. topic: ระบุชื่อหน่วยการเรียนรู้และหัวข้อย่อยให้ชัดเจน ครบถ้วน
+        2. student_eval: รายงานผลการประเมินการเรียนรู้ 3 ด้านอย่างเป็นทางการ
+           - ด้านพุทธิพิสัย (K): อธิบายความรู้ความเข้าใจในสาระสำคัญ
+           - ด้านทักษะพิสัย (P): อธิบายทักษะการปฏิบัติงานและการประยุกต์ใช้
+           - ด้านจิตพิสัย (A): อธิบายคุณธรรม จริยธรรม และเจตคติ พร้อมระบุร้อยละของผู้เรียนที่ผ่านเกณฑ์ประเมิน
+        3. teacher_eval: สรุปการจัดกิจกรรมการเรียนรู้และสื่อประกอบ
+           - อธิบายกิจกรรมการเรียนรู้แบบ Active Learning (เช่น การลงมือปฏิบัติจริง การแก้ปัญหา หรือกรณีศึกษา)
+           - ระบุสื่อ เทคโนโลยีดิจิทัล และแหล่งเรียนรู้ที่ส่งเสริมการเรียนรู้
+        4. problem_solution: ระบุปัญหาอุปสรรคและแนวทางแก้ไขเชิงพัฒนา
+           - วิเคราะห์ประเด็นข้อจำกัดในการเรียนรู้ของผู้เรียน
+           - เสนอแนวทางการแก้ไข เสริมสร้าง หรือพัฒนานอกเวลาเรียนอย่างเป็นระบบ
 
         ส่งออกเป็น Pure JSON โครงสร้างนี้เท่านั้น:
         {{
@@ -250,12 +291,12 @@ if st.button("🚀 เริ่มวิเคราะห์และสร้�
                     "week": 1,
                     "date": "สัปดาห์ที่ 1",
                     "time": "{time_slot}",
-                    "topic": "ชื่อหน่วยและเรื่องที่สอน",
+                    "topic": "หน่วยที่ ... เรื่อง ...",
                     "is_holiday": false,
                     "off_reason": "-",
-                    "student_eval": "ผลด้านผู้เรียน",
-                    "teacher_eval": "ผลด้านผู้สอน",
-                    "problem_solution": "ปัญหาและแนวทางแก้ไข"
+                    "student_eval": "ด้านพุทธิพิสัย (K): ... ด้านทักษะพิสัย (P): ... ด้านจิตพิสัย (A): ... โดยมีผู้เรียนผ่านเกณฑ์ประเมินร้อยละ ...",
+                    "teacher_eval": "จัดการเรียนรู้เชิงรุก (Active Learning) โดยใช้ ... ร่วมกับสื่อดิจิทัล ... ผู้เรียนมีความกระตือรือร้นและมีส่วนร่วมได้เป็นอย่างดี",
+                    "problem_solution": "พบปัญหาผู้เรียนบางราย ... ได้ดำเนินการแก้ไขโดย ... พร้อมติดตามผลอย่างใกล้ชิด"
                 }}
             ]
         }}
@@ -271,7 +312,7 @@ if st.button("🚀 เริ่มวิเคราะห์และสร้�
         last_error = None
 
         for target_m in models_to_try:
-            status_text.text(f"กำลังประมวลผลด้วยโมเดล {target_m}...")
+            status_text.text(f"กำลังประมวลผลเชิงวิชาการด้วยโมเดล {target_m}...")
             try:
                 response = client.models.generate_content(
                     model=target_m,
@@ -319,9 +360,9 @@ if st.button("🚀 เริ่มวิเคราะห์และสร้�
                     "topic": f"หน่วยการเรียนรู้ที่ {i}",
                     "is_holiday": False,
                     "off_reason": "-",
-                    "student_eval": "ผู้เรียนผ่านเกณฑ์ร้อยละ 90 ขึ้นไป มีทักษะและความตั้งใจในการปฏิบัติงาน",
-                    "teacher_eval": "จัดการเรียนรู้เชิงรุก (Active Learning) ผู้เรียนมีส่วนร่วมได้ดี",
-                    "problem_solution": "ให้คำแนะนำเพิ่มเติมแก่นักเรียนรายบุคคลหลังเลิกเรียน"
+                    "student_eval": "ด้านพุทธิพิสัย (K): ผู้เรียนมีความรู้ความเข้าใจในเนื้อหาตามจุดประสงค์การเรียนรู้ ด้านทักษะพิสัย (P): ปฏิบัติงานตามขั้นตอนได้อย่างถูกต้อง ด้านจิตพิสัย (A): มีวินัย ใฝ่เรียนรู้ และตรงต่อเวลา โดยผู้เรียนผ่านเกณฑ์ประเมินร้อยละ 90 ขึ้นไป",
+                    "teacher_eval": "จัดการเรียนรู้เชิงรุก (Active Learning) เน้นกระบวนการมีส่วนร่วมและการลงมือปฏิบัติจริง พร้อมใช้สื่อและเทคโนโลยีดิจิทัลประกอบการจัดการเรียนการสอนอย่างมีประสิทธิภาพ",
+                    "problem_solution": "ผู้เรียนบางรายต้องใช้เวลาในการฝึกทักษะเพิ่มเติม ได้ดำเนินการให้คำแนะนำรายบุคคลและมอบหมายเพื่อนช่วยเพื่อนในห้องปฏิบัติการเพื่อเสริมสร้างความเข้าใจ"
                 })
 
         tpl_bytes = tpl_file.read()
