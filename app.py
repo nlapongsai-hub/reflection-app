@@ -7,6 +7,8 @@ import time
 from datetime import datetime, timedelta
 from docxtpl import DocxTemplate
 import docx
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
 from google import genai
 from google.genai import types
 
@@ -131,7 +133,7 @@ if not st.session_state.authenticated:
         st.markdown("""
         <div class="footer-box" style="margin-top: 20px;">
             <div class="footer-badge">🛡️ PROPRIETARY SOFTWARE</div><br/>
-            © สงวนลิขสิทธิ์ พัฒนาเพื่อการศึกษาอาชีวศึกษาโดย <b>ครูณัฐวุฒิ ละผ่องใส</b>
+            © สงวนลิขสิทธิ์ พัฒนาโดย <b>นายณัฐวุฒิ หล้าปงสาย</b> ครูผู้ช่วย วิทยาลัยเทคนิคจันทบุรี
         </div>
         """, unsafe_allow_html=True)
     st.stop()
@@ -171,7 +173,7 @@ with st.sidebar:
     st.divider()
 
     st.subheader("👤 ข้อมูลครูผู้สอน")
-    teacher_name = st.text_input("ชื่อ-สกุลครูผู้สอน:", value="นายณัฐวุฒิ ละผ่องใส")
+    teacher_name = st.text_input("ชื่อ-สกุลครูผู้สอน:", value="นายณัฐวุฒิ หล้าปงสาย")
     
     dept_choice = st.selectbox("สาขาวิชา / แผนกวิชา:", DEPARTMENT_OPTIONS, index=0)
     if dept_choice == "อื่นๆ (ระบุเอง)":
@@ -187,8 +189,9 @@ with st.sidebar:
     st.markdown("""
     <div style="font-size: 12px; color: #94A3B8; text-align: center; margin-top: 25px;">
         <b>AI Vocational Reflection System</b><br/>
-        Version 2.5 • Official EdTech Build<br/>
-        © 2026 นายณัฐวุฒิ ละผ่องใส All Rights Reserved.
+        สงวนลิขสิทธิ์ พัฒนาโดย<br/>
+        <b>นายณัฐวุฒิ หล้าปงสาย</b><br/>
+        ครูผู้ช่วย วิทยาลัยเทคนิคจันทบุรี
     </div>
     """, unsafe_allow_html=True)
 
@@ -306,7 +309,6 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         ห้ามใส่เครื่องหมาย markdown block ส่งเฉพาะ Pure JSON
         """
 
-        # กำหนดใช้ 3.8 Flash เป็นหลัก และ 3.5 Flash Lite เป็นตัวสำรอง
         models_to_try = [
             "gemini-3.8-flash",
             "gemini-3.5-flash-lite"
@@ -422,14 +424,31 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             tmp_io.seek(0)
 
             sub_doc = docx.Document(tmp_io)
+
             if merged_doc is None:
                 merged_doc = sub_doc
             else:
-                merged_doc.add_page_break()
+                # รวมเอกสารโดยต่อหน้าใหม่แบบไม่มีหน้าว่างคั่น
+                first_element = True
                 for el in sub_doc.element.body:
                     if el.tag.endswith('sectPr'):
                         continue
-                    merged_doc.element.body.append(copy.deepcopy(el))
+                    copied_el = copy.deepcopy(el)
+                    if first_element:
+                        # บังคับให้องค์ประกอบแรกขึ้นหน้าใหม่ทันทีโดยไม่สร้างย่อหน้าเปล่า
+                        if copied_el.tag.endswith('p'):
+                            pPr = copied_el.find('{[http://schemas.openxmlformats.org/wordprocessingml/2006/main](http://schemas.openxmlformats.org/wordprocessingml/2006/main)}pPr')
+                            if pPr is None:
+                                pPr = parse_xml(r'<w:pPr %s><w:pageBreakBefore/></w:pPr>' % nsdecls('w'))
+                                copied_el.insert(0, pPr)
+                            else:
+                                pPr.append(parse_xml(r'<w:pageBreakBefore %s/>' % nsdecls('w')))
+                        elif copied_el.tag.endswith('tbl'):
+                            # ถ้าเป็นตาราง ให้แทรกตัวแบ่งหน้าบน Paragraph นำหน้าแบบแนบชิด
+                            p_break = parse_xml(r'<w:p %s><w:pPr><w:pageBreakBefore/><w:spacing w:after="0" w:before="0" w:line="1" w:lineRule="exact"/><w:rPr><w:sz w:val="2"/></w:rPr></w:pPr></w:p>' % nsdecls('w'))
+                            merged_doc.element.body.append(p_break)
+                        first_element = False
+                    merged_doc.element.body.append(copied_el)
 
         output_stream = io.BytesIO()
         merged_doc.save(output_stream)
@@ -439,7 +458,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         status_text.empty()
 
         st.balloons()
-        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ สำหรับระดับ {class_level} สาขา {department} เรียบร้อย 100%!")
+        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ เรียงต่อกันหน้าต่อหน้า ไม่มีหน้าว่าง 100%!")
         st.download_button(
             label="📥 ดาวน์โหลดไฟล์ Word (แบบฟอร์มวิทยาลัยตรงเป๊ะ)",
             data=output_stream,
@@ -457,7 +476,7 @@ st.markdown("""
 <div class="footer-box">
     <div class="footer-badge">🛡️ PROPRIETARY & EDUCATIONAL OPEN-SOURCE</div><br/>
     <b>ระบบปัญญาประดิษฐ์สกัดและจัดทำบันทึกหลังการสอนอาชีวศึกษา (AI Vocational Reflection)</b><br/>
-    สงวนลิขสิทธิ์ พัฒนาโดย <b>นายณัฐวุฒิ ละผ่องใส</b> • แผนกวิชาการจัดการโลจิสติกส์และซัพพลายเชน<br/>
+    สงวนลิขสิทธิ์ พัฒนาโดย <b>นายณัฐวุฒิ หล้าปงสาย</b> ครูผู้ช่วย วิทยาลัยเทคนิคจันทบุรี<br/>
     <span style="font-size: 12px; color: #94A3B8;">ขับเคลื่อนด้วย Streamlit & Google Gemini AI Flash Engine</span>
 </div>
 """, unsafe_allow_html=True)
