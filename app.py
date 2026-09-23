@@ -138,15 +138,11 @@ if not st.session_state.authenticated:
         """, unsafe_allow_html=True)
     st.stop()
 
-# ข้อมูลปฏิทินย่อเพื่อไม่ให้ตารางล้นบรรทัด
+# ข้อมูลปฏิทินย่อ
 THAI_MONTHS_SHORT = [
     "", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
     "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
 ]
-DAY_SHORT = {
-    "วันจันทร์": "จันทร์", "วันอังคาร": "อังคาร", "วันพุธ": "พุธ",
-    "วันพฤหัสบดี": "พฤหัสบดี", "วันศุกร์": "ศุกร์", "วันเสาร์": "เสาร์", "วันอาทิตย์": "อาทิตย์"
-}
 
 DAY_NAMES_WITH_NONE = ["-", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
 DAY_INDEX_MAP = {
@@ -284,13 +280,12 @@ with col2:
         height=70
     )
 
-# ฟังก์ชันจัดวันที่ให้พอดีช่องตาราง ไม่ตกบรรทัด
-def format_compact_thai_date(day_thai_name, dt):
-    d_short = DAY_SHORT.get(day_thai_name, day_thai_name)
+# ตัดชื่อวันออก เหลือเพียงวันที่ เดือนย่อ และพ.ศ. ย่อ เช่น "18 พ.ค. 69" เพื่อไม่ให้ล้นตาราง
+def format_compact_thai_date(dt):
     d = dt.day
     m = THAI_MONTHS_SHORT[dt.month]
-    y = dt.year + 543
-    return f"{d_short} {d} {m} {y}"
+    y_short = str(dt.year + 543)[2:]
+    return f"{d} {m} {y_short}"
 
 if st.button(f"🚀 เริ่มสร้างเอกสารบันทึกหลังการสอนครบ {target_weeks} สัปดาห์", use_container_width=True):
     api_key = api_key_input.strip() if api_key_input else ""
@@ -445,8 +440,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             for d_name, t_list in days_grouped.items():
                 t_wday = DAY_INDEX_MAP.get(d_name, 0)
                 dt_slot = base_week_date + timedelta(days=(t_wday - base_week_date.weekday()))
-                date_lines.append(format_compact_thai_date(d_name, dt_slot))
-                # ไม่ใส่คำว่า "เวลา" นำหน้า ให้เหลือเฉพาะตัวเลขช่วงเวลา เช่น "15.30-16.30 น."
+                date_lines.append(format_compact_thai_date(dt_slot))
                 time_lines.append(", ".join(t_list))
 
             date_display = "\n".join(date_lines)
