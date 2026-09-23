@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from docxtpl import DocxTemplate
 import docx
 from docx.oxml import parse_xml, OxmlElement
-from docx.oxml.ns import nsdecls, qn
+from docx.oxml.ns import nsdecls
 from google import genai
 from google.genai import types
 
@@ -138,12 +138,38 @@ if not st.session_state.authenticated:
         """, unsafe_allow_html=True)
     st.stop()
 
-# ข้อมูลปฏิทินและแผนกวิชา
-THAI_MONTHS = [
-    "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-    "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+# ข้อมูลปฏิทินย่อเพื่อไม่ให้ตารางล้นบรรทัด
+THAI_MONTHS_SHORT = [
+    "", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+    "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
 ]
-DAY_NAMES = ["วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
+DAY_SHORT = {
+    "วันจันทร์": "จันทร์", "วันอังคาร": "อังคาร", "วันพุธ": "พุธ",
+    "วันพฤหัสบดี": "พฤหัสบดี", "วันศุกร์": "ศุกร์", "วันเสาร์": "เสาร์", "วันอาทิตย์": "อาทิตย์"
+}
+
+DAY_NAMES_WITH_NONE = ["-", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
+DAY_INDEX_MAP = {
+    "วันจันทร์": 0, "วันอังคาร": 1, "วันพุธ": 2, "วันพฤหัสบดี": 3,
+    "วันศุกร์": 4, "วันเสาร์": 5, "วันอาทิตย์": 6
+}
+
+# รายการช่วงเวลาเรียนแบบ 1 ชั่วโมง ตั้งแต่ 08.30 ถึง 20.30 น.
+TIME_PRESETS = [
+    "08.30-09.30 น.",
+    "09.30-10.30 น.",
+    "10.30-11.30 น.",
+    "11.30-12.30 น.",
+    "12.30-13.30 น.",
+    "13.30-14.30 น.",
+    "14.30-15.30 น.",
+    "15.30-16.30 น.",
+    "16.30-17.30 น.",
+    "17.30-18.30 น.",
+    "18.30-19.30 น.",
+    "19.30-20.30 น."
+]
+
 DEPARTMENT_OPTIONS = [
     "การจัดการโลจิสติกส์และซัพพลายเชน",
     "เทคโนโลยีสารสนเทศ",
@@ -160,7 +186,7 @@ DEPARTMENT_OPTIONS = [
 st.markdown("""
 <div class="main-header">
     <h1>📝 ระบบจัดทำบันทึกหลังการสอนอัตโนมัติ (AI Professional)</h1>
-    <p>สกัดโครงการสอนตามหลักวิชาการอาชีวศึกษา จัดรูปแบบต่อกันหน้าต่อหน้า ไร้หน้าว่าง 100%</p>
+    <p>วิเคราะห์โครงการสอน สกัดรายสัปดาห์ จัดกลุ่มวันและเวลาอัตโนมัติ ไร้หน้าว่าง 100%</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -221,23 +247,33 @@ with col1:
 with col2:
     st.subheader("⏰ 2. ตารางวัน-เวลา และการฉีกคาบสอน")
     slots_count = st.selectbox(
-        "จำนวนคาบสอนใน 1 สัปดาห์ (ฉีกคาบได้สูงสุด 4 คาบ):",
+        "จำนวนคาบ/ช่วงเวลาใน 1 สัปดาห์ (ฉีกคาบได้สูงสุด 4 คาบ):",
         options=[1, 2, 3, 4],
-        format_func=lambda x: f"สอน {x} คาบ / สัปดาห์" if x > 1 else "สอน 1 คาบ (วันเดียวจบ)",
-        index=1
+        format_func=lambda x: f"สอน {x} คาบ / สัปดาห์" if x > 1 else "สอน 1 คาบ (รวดเดียว)",
+        index=0
     )
 
     slots_info = []
-    default_days = [0, 1, 2, 3]
-    default_times = ["15.30-16.30 น.", "08.30-10.30 น.", "10.30-12.30 น.", "13.30-15.30 น."]
+    default_days_idx = [1, 1, 2, 3]
+    default_times_idx = [0, 1, 2, 3]
 
     for i in range(slots_count):
         st.markdown(f"**📌 รายละเอียดคาบที่ {i+1}:**")
         sc1, sc2 = st.columns(2)
         with sc1:
-            d_val = st.selectbox(f"วัน (คาบที่ {i+1}):", DAY_NAMES, index=default_days[i % len(default_days)], key=f"day_slot_{i}")
+            d_val = st.selectbox(
+                f"วัน (คาบที่ {i+1}):",
+                DAY_NAMES_WITH_NONE,
+                index=default_days_idx[i % len(default_days_idx)],
+                key=f"day_slot_{i}"
+            )
         with sc2:
-            t_val = st.text_input(f"เวลา (คาบที่ {i+1}):", value=default_times[i % len(default_times)], key=f"time_slot_{i}")
+            t_val = st.selectbox(
+                f"เวลา (คาบที่ {i+1}):",
+                TIME_PRESETS,
+                index=default_times_idx[i % len(default_times_idx)],
+                key=f"time_slot_{i}"
+            )
         slots_info.append({"day": d_val, "time": t_val})
 
     start_date = st.date_input("📅 วันที่เริ่มสอนสัปดาห์ที่ 1 (คำนวณปฏิทินไทยอัตโนมัติ):")
@@ -248,12 +284,13 @@ with col2:
         height=70
     )
 
-def format_thai_date(dt):
+# ฟังก์ชันจัดวันที่ให้พอดีช่องตาราง ไม่ตกบรรทัด
+def format_compact_thai_date(day_thai_name, dt):
+    d_short = DAY_SHORT.get(day_thai_name, day_thai_name)
     d = dt.day
-    m = THAI_MONTHS[dt.month]
+    m = THAI_MONTHS_SHORT[dt.month]
     y = dt.year + 543
-    day_name = DAY_NAMES[dt.weekday()]
-    return f"{day_name} {d} {m} {y}"
+    return f"{d_short} {d} {m} {y}"
 
 if st.button(f"🚀 เริ่มสร้างเอกสารบันทึกหลังการสอนครบ {target_weeks} สัปดาห์", use_container_width=True):
     api_key = api_key_input.strip() if api_key_input else ""
@@ -381,7 +418,6 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         tpl_bytes = tpl_file.read()
         merged_doc = None
         total_count = len(final_weeks)
-        day_map = {name: idx for idx, name in enumerate(DAY_NAMES)}
 
         for idx, w in enumerate(final_weeks):
             progress_bar.progress(int(((idx + 1) / total_count) * 100))
@@ -390,13 +426,28 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             week_num = w.get("week", idx + 1)
             base_week_date = start_date + timedelta(weeks=(week_num - 1))
             
+            # กรองเฉพาะคาบที่เลือกวันจริง
+            valid_slots = [s for s in slots_info if s["day"] != "-" and s["day"] in DAY_INDEX_MAP]
+            if not valid_slots:
+                valid_slots = [{"day": "วันจันทร์", "time": slots_info[0]["time"] if slots_info else "08.30-09.30 น."}]
+
+            # จัดกลุ่มตามวัน
+            days_grouped = {}
+            for slot in valid_slots:
+                d_name = slot["day"]
+                t_val = slot["time"]
+                if d_name not in days_grouped:
+                    days_grouped[d_name] = []
+                days_grouped[d_name].append(t_val)
+
             date_lines = []
             time_lines = []
-            for slot in slots_info:
-                t_wday = day_map.get(slot["day"], 0)
+            for d_name, t_list in days_grouped.items():
+                t_wday = DAY_INDEX_MAP.get(d_name, 0)
                 dt_slot = base_week_date + timedelta(days=(t_wday - base_week_date.weekday()))
-                date_lines.append(format_thai_date(dt_slot))
-                time_lines.append(f"เวลา {slot['time']}")
+                date_lines.append(format_compact_thai_date(d_name, dt_slot))
+                # ไม่ใส่คำว่า "เวลา" นำหน้า ให้เหลือเฉพาะตัวเลขช่วงเวลา เช่น "15.30-16.30 น."
+                time_lines.append(", ".join(t_list))
 
             date_display = "\n".join(date_lines)
             time_display = "\n".join(time_lines)
@@ -435,7 +486,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
 
             sub_doc = docx.Document(tmp_io)
 
-            # กำจัดย่อหน้าว่างเปล่าท้ายเอกสารต้นฉบับทั้งหมด เพื่อไม่ให้เกิดการดันตกหน้า
+            # ลบย่อหน้าว่างเปล่าท้ายหน้าของแต่ละสัปดาห์
             while len(sub_doc.paragraphs) > 0:
                 last_p = sub_doc.paragraphs[-1]
                 if not last_p.text.strip() and not last_p._element.xpath('.//w:drawing'):
@@ -447,7 +498,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             if merged_doc is None:
                 merged_doc = sub_doc
             else:
-                # รวมเอกสารโดยต่อหน้าใหม่แบบไม่มีหน้าว่างคั่น (Pure Page Break)
+                # บังคับขึ้นหน้าใหม่โดยไม่แทรกบรรทัดว่าง
                 is_first_block = True
                 for el in sub_doc.element.body:
                     if el.tag.endswith('sectPr'):
@@ -455,12 +506,10 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
                     copied_el = copy.deepcopy(el)
 
                     if is_first_block:
-                        # สร้าง Page Break แบบแนบสนิท ไม่ทิ้งระยะบรรทัดว่าง
                         p_break = OxmlElement('w:p')
                         pPr = OxmlElement('w:pPr')
                         pPr.append(OxmlElement('w:pageBreakBefore'))
                         
-                        # กำหนดขนาดฟอนต์ 1pt และระยะบรรทัด 0 เพื่อไม่ให้กินพื้นที่แม้แต่มิลลิเมตรเดียว
                         spacing = parse_xml(r'<w:spacing %s w:before="0" w:after="0" w:line="1" w:lineRule="exact"/>' % nsdecls('w'))
                         rPr = parse_xml(r'<w:rPr %s><w:sz w:val="2"/><w:szCs w:val="2"/></w:rPr>' % nsdecls('w'))
                         pPr.append(spacing)
@@ -472,7 +521,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
 
                     merged_doc.element.body.append(copied_el)
 
-        # ลบ Section Break และ Empty Paragraph ท้ายเอกสารหลัก
+        # ลบย่อหน้าว่างท้ายสุดของเอกสารรวม
         while len(merged_doc.paragraphs) > 0:
             final_p = merged_doc.paragraphs[-1]
             if not final_p.text.strip() and not final_p._element.xpath('.//w:drawing'):
@@ -489,7 +538,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         status_text.empty()
 
         st.balloons()
-        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ ถูกต้องตามหลักวิชาการ ต่อเนื่องหน้าต่อหน้า ไร้หน้าว่าง 100%!")
+        st.success(f"🎉 สร้างเอกสารสำเร็จครบ {target_weeks} สัปดาห์ จัดตารางกระชับพอดีเป๊ะ ไร้หน้าว่าง 100%!")
         st.download_button(
             label="📥 ดาวน์โหลดไฟล์ Word (แบบฟอร์มวิทยาลัยตรงเป๊ะ)",
             data=output_stream,
