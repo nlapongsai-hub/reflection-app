@@ -13,7 +13,6 @@ from docx.oxml.ns import nsdecls
 from google import genai
 from google.genai import types
 
-# กำหนดรหัสผ่านสำหรับปลดล็อกระบบ
 SYSTEM_PASSCODE = "0863449483"
 
 st.set_page_config(
@@ -23,7 +22,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# สไตล์ตกแต่ง UI สีสัน สดใส มีมิติ
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
@@ -117,7 +115,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ระบบตรวจสอบรหัสผ่านปลดล็อก
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
@@ -151,7 +148,6 @@ if not st.session_state.authenticated:
         """, unsafe_allow_html=True)
     st.stop()
 
-# ข้อมูลปฏิทิน แผนกวิชา
 THAI_MONTHS_SHORT = [
     "", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
     "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
@@ -241,7 +237,6 @@ with col1:
     class_level = f"{degree} {year_num}"
     st.info(f"✨ ระดับ: **{class_level}** | สาขา: **{department}** | กำหนดอัตโนมัติ: **{target_weeks} สัปดาห์**")
 
-# ฟังก์ชันคำนวณชั่วโมงสอนจากข้อความ เช่น "08.30-11.30 น."
 def parse_time_duration(time_str):
     nums = re.findall(r'(\d{1,2})[.:](\d{2})', time_str)
     if len(nums) >= 2:
@@ -258,7 +253,6 @@ def parse_time_duration(time_str):
 with col2:
     st.subheader("⏰ 2. ตารางวัน-เวลาเรียน")
 
-    # คาบที่ 1 (คาบหลัก)
     st.markdown("**📌 รายละเอียดคาบที่ 1:**")
     sc1, sc2 = st.columns(2)
     with sc1:
@@ -268,7 +262,6 @@ with col2:
 
     slots_info = [{"day": d1, "time": t1}]
 
-    # ฉีกคาบเพิ่มเติม (คาบ 2-4)
     with st.expander("➕ เพิ่มคาบสอนอื่นในสัปดาห์ (คาบที่ 2 - 4)"):
         st.caption("หากไม่มีการสอนคาบอื่น ให้เลือกวันเป็น '-' ระบบจะไม่นำไปคิด")
         for i in range(1, 4):
@@ -281,7 +274,6 @@ with col2:
             if dx != "-":
                 slots_info.append({"day": dx, "time": tx})
 
-    # คำนวณชั่วโมงสอนรวมอัตโนมัติ
     total_hours = sum(parse_time_duration(s["time"]) for s in slots_info)
     if total_hours > 0:
         if total_hours.is_integer():
@@ -300,7 +292,6 @@ with col2:
         height=70
     )
 
-# ฟังก์ชันจัดวันที่ให้พอดีช่องตาราง ไม่ตกบรรทัด
 def format_compact_thai_date(day_thai_name, dt):
     d_short = DAY_SHORT.get(day_thai_name, day_thai_name)
     d = dt.day
@@ -372,32 +363,38 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         ห้ามใส่เครื่องหมาย markdown block ส่งเฉพาะ Pure JSON เท่านั้น
         """
 
+        # ลิสต์โมเดลพร้อมระบบ Fallback ครบวงจร
         models_to_try = [
-            "gemini-3.8-flash",
-            "gemini-3.5-flash-lite"
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-1.5-flash"
         ]
         response = None
         last_error = None
 
+        # ระบบ Retry อัตโนมัติ ป้องกัน 503 UNAVAILABLE
         for target_m in models_to_try:
-            status_text.text(f"⏳ กำลังประมวลผลด้วยโมเดล {target_m}...")
-            try:
-                response = client.models.generate_content(
-                    model=target_m,
-                    contents=[
-                        types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
-                        prompt
-                    ],
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        temperature=0.25
+            for retry_round in range(2):
+                status_text.text(f"⏳ กำลังประมวลผลด้วยโมเดล {target_m}...")
+                try:
+                    response = client.models.generate_content(
+                        model=target_m,
+                        contents=[
+                            types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
+                            prompt
+                        ],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            temperature=0.25
+                        )
                     )
-                )
-                if response and response.text:
-                    break
-            except Exception as err:
-                last_error = err
-                time.sleep(1)
+                    if response and response.text:
+                        break
+                except Exception as err:
+                    last_error = err
+                    time.sleep(2)  # รอ 2 วินาทีก่อนลองใหม่
+            if response and response.text:
+                break
 
         if not response or not response.text:
             raise Exception(f"ไม่สามารถเชื่อมต่อโมเดลได้: {last_error}")
@@ -442,17 +439,14 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             week_num = w.get("week", idx + 1)
             base_week_date = start_date + timedelta(weeks=(week_num - 1))
             
-            # กรองเฉพาะคาบที่เลือกวันจริง
             valid_slots = [s for s in slots_info if s["day"] != "-" and s["day"] in DAY_INDEX_MAP]
             if not valid_slots:
                 valid_slots = [{"day": "วันจันทร์", "time": slots_info[0]["time"] if slots_info else "08.30-11.30 น."}]
 
-            # จัดกลุ่มตามวัน เพื่อไม่ให้วันเดียวกันแตกเป็นหลายบรรทัด
             days_grouped = {}
             for slot in valid_slots:
                 d_name = slot["day"]
                 t_val = slot["time"].strip()
-                # ลบคำว่า "เวลา" นำหน้าออกถ้าผู้ใช้เผลอพิมพ์มา
                 if t_val.startswith("เวลา"):
                     t_val = t_val.replace("เวลา", "").strip()
                 if d_name not in days_grouped:
@@ -504,7 +498,6 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
 
             sub_doc = docx.Document(tmp_io)
 
-            # ลบย่อหน้าว่างเปล่าท้ายหน้าของแต่ละสัปดาห์
             while len(sub_doc.paragraphs) > 0:
                 last_p = sub_doc.paragraphs[-1]
                 if not last_p.text.strip() and not last_p._element.xpath('.//w:drawing'):
@@ -516,7 +509,6 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             if merged_doc is None:
                 merged_doc = sub_doc
             else:
-                # ขึ้นหน้าใหม่แบบไม่เพิ่มย่อหน้าว่างคั่น
                 is_first_block = True
                 for el in sub_doc.element.body:
                     if el.tag.endswith('sectPr'):
@@ -539,7 +531,6 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
 
                     merged_doc.element.body.append(copied_el)
 
-        # ลบย่อหน้าว่างท้ายสุดของเอกสารรวม
         while len(merged_doc.paragraphs) > 0:
             final_p = merged_doc.paragraphs[-1]
             if not final_p.text.strip() and not final_p._element.xpath('.//w:drawing'):
@@ -569,12 +560,11 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         status_text.empty()
         st.error(f"เกิดข้อผิดพลาด: {str(e)}")
 
-# กล่องข้อมูลลิขสิทธิ์และผู้พัฒนาระบบด้านล่างสุด
 st.markdown("""
 <div class="footer-box">
     <div class="footer-badge">🛡️ PROPRIETARY & EDUCATIONAL OPEN-SOURCE</div><br/>
     <b>ระบบปัญญาประดิษฐ์สกัดและจัดทำบันทึกหลังการสอนอาชีวศึกษา (AI Vocational Reflection)</b><br/>
     สงวนลิขสิทธิ์ พัฒนาโดย <b>นายณัฐวุฒิ หล้าปงสาย</b> ครูผู้ช่วย วิทยาลัยเทคนิคจันทบุรี<br/>
-    <span style="font-size: 12px; color: #94A3B8;">ขับเคลื่อนด้วย Streamlit & Google Gemini AI Flash Engine</span>
+    <span style="font-size: 12px; color: #94A3B8;">ขับเคลื่อนด้วย Streamlit & Google Gemini AI Engine</span>
 </div>
 """, unsafe_allow_html=True)
