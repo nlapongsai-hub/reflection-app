@@ -363,19 +363,17 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         ห้ามใส่เครื่องหมาย markdown block ส่งเฉพาะ Pure JSON เท่านั้น
         """
 
-        # ลิสต์โมเดลพร้อมระบบ Fallback ครบวงจร
+        # ใช้โมเดลที่เป็นมาตรฐานปัจจุบันเท่านั้น ตัด 1.5 ออก
         models_to_try = [
             "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-1.5-flash"
+            "gemini-2.5-flash-lite"
         ]
         response = None
         last_error = None
 
-        # ระบบ Retry อัตโนมัติ ป้องกัน 503 UNAVAILABLE
         for target_m in models_to_try:
-            for retry_round in range(2):
-                status_text.text(f"⏳ กำลังประมวลผลด้วยโมเดล {target_m}...")
+            for retry_round in range(3):
+                status_text.text(f"⏳ กำลังประมวลผลด้วยโมเดล {target_m} (รอบที่ {retry_round + 1})...")
                 try:
                     response = client.models.generate_content(
                         model=target_m,
@@ -392,7 +390,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
                         break
                 except Exception as err:
                     last_error = err
-                    time.sleep(2)  # รอ 2 วินาทีก่อนลองใหม่
+                    time.sleep(3)
             if response and response.text:
                 break
 
