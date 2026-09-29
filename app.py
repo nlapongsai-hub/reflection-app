@@ -363,10 +363,10 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
         ห้ามใส่เครื่องหมาย markdown block ส่งเฉพาะ Pure JSON เท่านั้น
         """
 
-        # ใช้โมเดลที่เป็นมาตรฐานปัจจุบันเท่านั้น ตัด 1.5 ออก
+        # ปรับใช้โมเดลรุ่นแนะนำตามระบบของ Google[span_2](start_span)[span_2](end_span)
         models_to_try = [
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite"
+            "gemini-3.5-flash-lite",
+            "gemini-3.8-flash"
         ]
         response = None
         last_error = None
