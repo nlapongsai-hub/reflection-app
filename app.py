@@ -3,6 +3,7 @@ import os
 import json
 import io
 import copy
+import re
 import time
 from datetime import datetime, timedelta
 from docxtpl import DocxTemplate
@@ -101,6 +102,18 @@ st.markdown("""
         color: #334155;
         margin-bottom: 8px;
     }
+    .hours-badge {
+        background: #ECFDF5;
+        color: #065F46;
+        border: 1px solid #A7F3D0;
+        padding: 8px 14px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 14.5px;
+        display: inline-block;
+        margin-top: 6px;
+        margin-bottom: 12px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -138,33 +151,21 @@ if not st.session_state.authenticated:
         """, unsafe_allow_html=True)
     st.stop()
 
-# ข้อมูลปฏิทินย่อ
+# ข้อมูลปฏิทิน แผนกวิชา
 THAI_MONTHS_SHORT = [
     "", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
     "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
 ]
+DAY_SHORT = {
+    "วันจันทร์": "จันทร์", "วันอังคาร": "อังคาร", "วันพุธ": "พุธ",
+    "วันพฤหัสบดี": "พฤหัสบดี", "วันศุกร์": "ศุกร์", "วันเสาร์": "เสาร์", "วันอาทิตย์": "อาทิตย์"
+}
 
 DAY_NAMES_WITH_NONE = ["-", "วันจันทร์", "วันอังคาร", "วันพุธ", "วันพฤหัสบดี", "วันศุกร์", "วันเสาร์", "วันอาทิตย์"]
 DAY_INDEX_MAP = {
     "วันจันทร์": 0, "วันอังคาร": 1, "วันพุธ": 2, "วันพฤหัสบดี": 3,
     "วันศุกร์": 4, "วันเสาร์": 5, "วันอาทิตย์": 6
 }
-
-# รายการช่วงเวลาเรียนแบบ 1 ชั่วโมง ตั้งแต่ 08.30 ถึง 20.30 น.
-TIME_PRESETS = [
-    "08.30-09.30 น.",
-    "09.30-10.30 น.",
-    "10.30-11.30 น.",
-    "11.30-12.30 น.",
-    "12.30-13.30 น.",
-    "13.30-14.30 น.",
-    "14.30-15.30 น.",
-    "15.30-16.30 น.",
-    "16.30-17.30 น.",
-    "17.30-18.30 น.",
-    "18.30-19.30 น.",
-    "19.30-20.30 น."
-]
 
 DEPARTMENT_OPTIONS = [
     "การจัดการโลจิสติกส์และซัพพลายเชน",
@@ -182,7 +183,7 @@ DEPARTMENT_OPTIONS = [
 st.markdown("""
 <div class="main-header">
     <h1>📝 ระบบจัดทำบันทึกหลังการสอนอัตโนมัติ (AI Professional)</h1>
-    <p>วิเคราะห์โครงการสอน สกัดรายสัปดาห์ จัดกลุ่มวันและเวลาอัตโนมัติ ไร้หน้าว่าง 100%</p>
+    <p>วิเคราะห์โครงการสอน สกัดรายสัปดาห์ คำนวณชั่วโมงสอนอัตโนมัติ ไร้หน้าว่าง 100%</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -240,37 +241,56 @@ with col1:
     class_level = f"{degree} {year_num}"
     st.info(f"✨ ระดับ: **{class_level}** | สาขา: **{department}** | กำหนดอัตโนมัติ: **{target_weeks} สัปดาห์**")
 
+# ฟังก์ชันคำนวณชั่วโมงสอนจากข้อความ เช่น "08.30-11.30 น."
+def parse_time_duration(time_str):
+    nums = re.findall(r'(\d{1,2})[.:](\d{2})', time_str)
+    if len(nums) >= 2:
+        try:
+            h1, m1 = int(nums[0][0]), int(nums[0][1])
+            h2, m2 = int(nums[1][0]), int(nums[1][1])
+            mins = (h2 * 60 + m2) - (h1 * 60 + m1)
+            if mins > 0:
+                return mins / 60.0
+        except Exception:
+            pass
+    return 0.0
+
 with col2:
-    st.subheader("⏰ 2. ตารางวัน-เวลา และการฉีกคาบสอน")
-    slots_count = st.selectbox(
-        "จำนวนคาบ/ช่วงเวลาใน 1 สัปดาห์ (ฉีกคาบได้สูงสุด 4 คาบ):",
-        options=[1, 2, 3, 4],
-        format_func=lambda x: f"สอน {x} คาบ / สัปดาห์" if x > 1 else "สอน 1 คาบ (รวดเดียว)",
-        index=0
-    )
+    st.subheader("⏰ 2. ตารางวัน-เวลาเรียน")
 
-    slots_info = []
-    default_days_idx = [1, 1, 2, 3]
-    default_times_idx = [0, 1, 2, 3]
+    # คาบที่ 1 (คาบหลัก)
+    st.markdown("**📌 รายละเอียดคาบที่ 1:**")
+    sc1, sc2 = st.columns(2)
+    with sc1:
+        d1 = st.selectbox("วัน (คาบที่ 1):", [d for d in DAY_NAMES_WITH_NONE if d != "-"], index=0, key="day_slot_0")
+    with sc2:
+        t1 = st.text_input("เวลา (คาบที่ 1):", value="08.30-11.30 น.", key="time_slot_0", placeholder="เช่น 08.30-11.30 น.")
 
-    for i in range(slots_count):
-        st.markdown(f"**📌 รายละเอียดคาบที่ {i+1}:**")
-        sc1, sc2 = st.columns(2)
-        with sc1:
-            d_val = st.selectbox(
-                f"วัน (คาบที่ {i+1}):",
-                DAY_NAMES_WITH_NONE,
-                index=default_days_idx[i % len(default_days_idx)],
-                key=f"day_slot_{i}"
-            )
-        with sc2:
-            t_val = st.selectbox(
-                f"เวลา (คาบที่ {i+1}):",
-                TIME_PRESETS,
-                index=default_times_idx[i % len(default_times_idx)],
-                key=f"time_slot_{i}"
-            )
-        slots_info.append({"day": d_val, "time": t_val})
+    slots_info = [{"day": d1, "time": t1}]
+
+    # ฉีกคาบเพิ่มเติม (คาบ 2-4)
+    with st.expander("➕ เพิ่มคาบสอนอื่นในสัปดาห์ (คาบที่ 2 - 4)"):
+        st.caption("หากไม่มีการสอนคาบอื่น ให้เลือกวันเป็น '-' ระบบจะไม่นำไปคิด")
+        for i in range(1, 4):
+            st.markdown(f"**รายละเอียดคาบที่ {i+1}:**")
+            cx1, cx2 = st.columns(2)
+            with cx1:
+                dx = st.selectbox(f"วัน (คาบที่ {i+1}):", DAY_NAMES_WITH_NONE, index=0, key=f"day_slot_{i}")
+            with cx2:
+                tx = st.text_input(f"เวลา (คาบที่ {i+1}):", value="13.30-15.30 น.", key=f"time_slot_{i}")
+            if dx != "-":
+                slots_info.append({"day": dx, "time": tx})
+
+    # คำนวณชั่วโมงสอนรวมอัตโนมัติ
+    total_hours = sum(parse_time_duration(s["time"]) for s in slots_info)
+    if total_hours > 0:
+        if total_hours.is_integer():
+            h_display = f"{int(total_hours)} ชั่วโมง"
+        else:
+            h_display = f"{total_hours:.1f} ชั่วโมง"
+        st.markdown(f'<div class="hours-badge">⏱️ รวมเวลาสอน: <b>{h_display}</b> / สัปดาห์</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="hours-badge">⏱️ รวมเวลาสอน: <b>-</b></div>', unsafe_allow_html=True)
 
     start_date = st.date_input("📅 วันที่เริ่มสอนสัปดาห์ที่ 1 (คำนวณปฏิทินไทยอัตโนมัติ):")
 
@@ -280,12 +300,13 @@ with col2:
         height=70
     )
 
-# ตัดชื่อวันออก เหลือเพียงวันที่ เดือนย่อ และพ.ศ. ย่อ เช่น "18 พ.ค. 69" เพื่อไม่ให้ล้นตาราง
-def format_compact_thai_date(dt):
+# ฟังก์ชันจัดวันที่ให้พอดีช่องตาราง ไม่ตกบรรทัด
+def format_compact_thai_date(day_thai_name, dt):
+    d_short = DAY_SHORT.get(day_thai_name, day_thai_name)
     d = dt.day
     m = THAI_MONTHS_SHORT[dt.month]
     y_short = str(dt.year + 543)[2:]
-    return f"{d} {m} {y_short}"
+    return f"{d_short} {d} {m} {y_short}"
 
 if st.button(f"🚀 เริ่มสร้างเอกสารบันทึกหลังการสอนครบ {target_weeks} สัปดาห์", use_container_width=True):
     api_key = api_key_input.strip() if api_key_input else ""
@@ -424,13 +445,16 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             # กรองเฉพาะคาบที่เลือกวันจริง
             valid_slots = [s for s in slots_info if s["day"] != "-" and s["day"] in DAY_INDEX_MAP]
             if not valid_slots:
-                valid_slots = [{"day": "วันจันทร์", "time": slots_info[0]["time"] if slots_info else "08.30-09.30 น."}]
+                valid_slots = [{"day": "วันจันทร์", "time": slots_info[0]["time"] if slots_info else "08.30-11.30 น."}]
 
-            # จัดกลุ่มตามวัน
+            # จัดกลุ่มตามวัน เพื่อไม่ให้วันเดียวกันแตกเป็นหลายบรรทัด
             days_grouped = {}
             for slot in valid_slots:
                 d_name = slot["day"]
-                t_val = slot["time"]
+                t_val = slot["time"].strip()
+                # ลบคำว่า "เวลา" นำหน้าออกถ้าผู้ใช้เผลอพิมพ์มา
+                if t_val.startswith("เวลา"):
+                    t_val = t_val.replace("เวลา", "").strip()
                 if d_name not in days_grouped:
                     days_grouped[d_name] = []
                 days_grouped[d_name].append(t_val)
@@ -440,7 +464,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             for d_name, t_list in days_grouped.items():
                 t_wday = DAY_INDEX_MAP.get(d_name, 0)
                 dt_slot = base_week_date + timedelta(days=(t_wday - base_week_date.weekday()))
-                date_lines.append(format_compact_thai_date(dt_slot))
+                date_lines.append(format_compact_thai_date(d_name, dt_slot))
                 time_lines.append(", ".join(t_list))
 
             date_display = "\n".join(date_lines)
@@ -492,7 +516,7 @@ if st.button(f"🚀 เริ่มสร้างเอกสารบันท
             if merged_doc is None:
                 merged_doc = sub_doc
             else:
-                # บังคับขึ้นหน้าใหม่โดยไม่แทรกบรรทัดว่าง
+                # ขึ้นหน้าใหม่แบบไม่เพิ่มย่อหน้าว่างคั่น
                 is_first_block = True
                 for el in sub_doc.element.body:
                     if el.tag.endswith('sectPr'):
