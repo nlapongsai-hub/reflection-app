@@ -13,7 +13,7 @@ from docx.oxml.ns import nsdecls
 from google import genai
 from google.genai import types
 
-SYSTEM_PASSCODE = "0863449483nla"
+SYSTEM_PASSCODE = st.secrets["SYSTEM_PASSCODE"]
 
 st.set_page_config(
     page_title="ระบบบันทึกหลังการสอน AI อาชีวศึกษา",
